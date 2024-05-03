@@ -80,6 +80,14 @@ size_t getNode() {
         : -1;
 }
 
+void embedEdge(Edge& edg) {
+    std::cout << "cost: ";
+    std::cin >> edg.cost;
+
+    graph[edg.indx_from].edge.push_back(edg);
+    graph[edg.indx_to].edge.push_back(edg);
+}
+
 void fNewEdge() {
     if (graph.size() < 2) return;
 
@@ -92,13 +100,7 @@ void fNewEdge() {
 
         if ((edg.indx_to = getNode()) == -1) { interupted(); return; }
 
-        std::cout << "cost: ";
-        std::cin >> edg.cost;
-
-        std::cout << edg.indx_from << " " << edg.indx_to;
-
-        graph[edg.indx_from].edge.push_back(edg);
-        graph[edg.indx_to  ].edge.push_back(edg);
+        embedEdge(edg);
     }
     else if(inp[0] == 'n') {
         Edge edg;
@@ -106,11 +108,7 @@ void fNewEdge() {
 
         while ((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index);
 
-        std::cout << "cost: ";
-        std::cin >> edg.cost;
-
-        graph[edg.indx_from].edge.push_back(edg);
-        graph[edg.indx_to  ].edge.push_back(edg);
+        embedEdge(edg);
     }
 }
 
@@ -158,7 +156,6 @@ void fSetOrigin() {
 
 void removeRefs(size_t targt) {
     auto& edges = graph[targt].edge;
-    auto& edges_edges = graph[targt].edge;
 
     size_t refs;
     size_t i = 0;
@@ -171,7 +168,16 @@ void removeRefs(size_t targt) {
 
         if (refs >= graph.size()) continue;
 
-        edges_edges = graph[refs].edge;
+        auto& edges_edges = graph[refs].edge;
+
+        /*
+            0-0-0
+            8-0-0
+            8 0-0
+            0 0-8
+            0 0 8
+            0   0
+        */
 
         for(j = 0; j < edges_edges.size(); j++) {
             if (edges_edges[j].indx_from == targt || edges_edges[j].indx_to == targt) {
@@ -179,6 +185,17 @@ void removeRefs(size_t targt) {
                 break;
             }
         }
+    }
+}
+
+void removeAllReference(size_t targt) {
+    removeRefs(targt);
+    name_map.erase(graph[targt].name);
+    graph.erase(graph.begin() + targt);
+
+    for (auto& dict : name_map) {
+        if (dict.second >= targt)
+            dict.second--;
     }
 }
 
@@ -196,20 +213,45 @@ void fRemovePoint() {
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
-        removeRefs(targt);
-        name_map.erase(graph[targt].name);
-        graph.erase(graph.begin() + targt);
+        removeAllReference(targt);
 
     } else if (inp[0] == 'n') {
         while ((std::cin >> targt, targt) >= graph.size());
 
         if (nod_origin_index >= targt) nod_origin_index--;
         
-        removeRefs(targt);
-        name_map.erase(graph[targt].name);
-        graph.erase(graph.begin() + targt);
-        
-        
+        removeAllReference(targt);
+    }
+}
+
+
+void fDictionPoint() {
+    for (auto& a : name_map) {
+        std::cout <<'"' << a.first << "\": " << a.second << '\n';
+    }
+}
+
+
+void fRemoveEdge() {
+    if (graph[nod_origin_index].edge.size() == 1) graph[nod_origin_index].edge.pop_back();
+    if (graph[nod_origin_index].edge.empty()) return;
+
+    std::cout << "use name as index(Y/n): ";
+    std::cin >> inp;
+
+    size_t targt;
+
+    if (inp[0] == 'Y') {
+        if ((targt = getNode()) == -1) { interupted(); return; }
+
+        for (size_t i = 0; i < graph[nod_origin_index].edge.size(); i++) {
+            if (graph[nod_origin_index].edge[i].indx_from == targt || graph[nod_origin_index].edge[i].indx_to == targt) {
+
+            }
+        }
+
+    } else if (inp[0] == 'n') {
+        while ((std::cin >> targt, targt) >= graph.size());
     }
 }
 
@@ -227,13 +269,14 @@ int main() {
 
         try {
             switch (convertToInt(inp)) {
-            case 0x7077656e: fNewPoint();    break;
-            case 0x6577656e: fNewEdge();     break;
-            case 0x6f746573: fSetOrigin();   break;
-            case 0x656d6572:                 break; // reme
-            case 0x706d6572: fRemovePoint(); break; // remp
-            case 0x6d6e6572:                 break; // renm
-            case 0x7473696c: fList();        break;
+            case 0x7077656e: fNewPoint();     break;
+            case 0x6577656e: fNewEdge();      break;
+            case 0x6f746573: fSetOrigin();    break;
+            case 0x656d6572:                  break; // reme
+            case 0x706d6572: fRemovePoint();  break;
+            case 0x6d6e6572:                  break; // renm
+            case 0x7473696c: fList();         break;
+            case 0x74636964: fDictionPoint(); break;
 
             default: std::cout << "invl\n";
             case 0x74697865: break;
