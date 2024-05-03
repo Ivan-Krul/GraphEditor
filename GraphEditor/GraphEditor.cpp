@@ -232,6 +232,22 @@ void fDictionPoint() {
 }
 
 
+void removeEdgeFromNodes(size_t targt) {
+    for (size_t i = 0; i < graph[nod_origin_index].edge.size(); i++) {
+        if (graph[nod_origin_index].edge[i].indx_from == targt || graph[nod_origin_index].edge[i].indx_to == targt) {
+            graph[nod_origin_index].edge.erase(graph[nod_origin_index].edge.begin() + i);
+            break;
+        }
+    }
+
+    for (size_t i = 0; i < graph[targt].edge.size(); i++) {
+        if (graph[targt].edge[i].indx_from == nod_origin_index || graph[targt].edge[i].indx_to == nod_origin_index) {
+            graph[targt].edge.erase(graph[targt].edge.begin() + i);
+            break;
+        }
+    }
+}
+
 void fRemoveEdge() {
     if (graph[nod_origin_index].edge.size() == 1) graph[nod_origin_index].edge.pop_back();
     if (graph[nod_origin_index].edge.empty()) return;
@@ -244,14 +260,25 @@ void fRemoveEdge() {
     if (inp[0] == 'Y') {
         if ((targt = getNode()) == -1) { interupted(); return; }
 
-        for (size_t i = 0; i < graph[nod_origin_index].edge.size(); i++) {
-            if (graph[nod_origin_index].edge[i].indx_from == targt || graph[nod_origin_index].edge[i].indx_to == targt) {
-
-            }
-        }
+        removeEdgeFromNodes(targt);
 
     } else if (inp[0] == 'n') {
         while ((std::cin >> targt, targt) >= graph.size());
+
+        removeEdgeFromNodes(targt);
+    }
+}
+
+
+void fRenamePoint() {
+    std::cout << "new name: ";
+    std::getline(std::cin >> std::ws, inp);
+
+    if (inp.size()) {
+        name_map.erase(graph[nod_origin_index].name);
+        graph[nod_origin_index].name = inp;
+
+        name_map.insert(std::make_pair(graph[nod_origin_index].name, nod_origin_index));
     }
 }
 
@@ -272,9 +299,9 @@ int main() {
             case 0x7077656e: fNewPoint();     break;
             case 0x6577656e: fNewEdge();      break;
             case 0x6f746573: fSetOrigin();    break;
-            case 0x656d6572:                  break; // reme
             case 0x706d6572: fRemovePoint();  break;
-            case 0x6d6e6572:                  break; // renm
+            case 0x656d6572: fRemoveEdge();   break;
+            case 0x6d6e6572: fRenamePoint();  break;
             case 0x7473696c: fList();         break;
             case 0x74636964: fDictionPoint(); break;
 
