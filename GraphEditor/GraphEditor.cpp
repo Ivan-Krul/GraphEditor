@@ -2,6 +2,8 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <fstream>
+#include <filesystem>
 
 struct Node;
 
@@ -274,16 +276,85 @@ void fRenamePoint() {
     std::cout << "new name: ";
     std::getline(std::cin >> std::ws, inp);
 
-    if (inp.size()) {
-        name_map.erase(graph[nod_origin_index].name);
-        graph[nod_origin_index].name = inp;
+    name_map.erase(graph[nod_origin_index].name);
+    graph[nod_origin_index].name = inp;
 
-        name_map.insert(std::make_pair(graph[nod_origin_index].name, nod_origin_index));
-    }
+    name_map.insert(std::make_pair(graph[nod_origin_index].name, nod_origin_index));
 }
 
 
+void getPythonPaths() {
+    std::cout << "list of saved files:\n";
+    for (const auto& ls : std::filesystem::directory_iterator()) {
+        if (ls.path().extension().string() == ".py") {
+            std::cout << ls.path().filename().string() << '\n';
+        }
+    }
+}
+
+void generateSaveCache() {
+    std::ofstream fout;
+    size_t dir;
+
+    fout.open("graph");
+
+    fout << graph.size() << '\n';
+
+    for (size_t i = 0; i < graph.size(); i++) {
+        auto& node_edges = graph[i].edge;
+
+        fout << graph[i].name << '\n' << node_edges.size() << '\n';
+
+        for (size_t j = 0; j < node_edges.size(); j++) {
+            dir = (node_edges[j].indx_from == i)
+                ? node_edges[j].indx_to
+                : node_edges[j].indx_from;
+
+            fout << dir << '\n' << node_edges[j].cost << '\n';
+        }
+    }
+
+    fout.close();
+}
+
+void executePythonScript(const std::string& pythonname, const std::string& filename) {
+    if (system(("python " + pythonname + " \"" + filename + "\"").c_str())) {
+        std::cout << "something went wrong with python script\n";
+    }
+}
+
+void fSaveGraph() {
+    std::string file;
+
+    getPythonPaths();
+
+    std::cout << "save by: ";
+    std::getline(std::cin >> std::ws, file);
+
+    std::cout << "save as (filename): ";
+    std::getline(std::cin >> std::ws, inp);
+
+    generateSaveCache();
+
+    executePythonScript(file, inp);
+}
+
+
+void fLoadGraph() {
+
+}
+
+
+bool isPythonMissing() {
+    return system("python --version");
+}
+
 int main() {
+    if (isPythonMissing()) {
+        std::cout << "python is missing in the enviroument/n";
+        return 1;
+    }
+
     while (convertToInt(inp) != 0x74697865) {
         if (nod_origin_index < graph.size())
             std::cout << '"' << graph[nod_origin_index].name.c_str() << '"';
@@ -304,6 +375,8 @@ int main() {
             case 0x6d6e6572: fRenamePoint();  break;
             case 0x7473696c: fList();         break;
             case 0x74636964: fDictionPoint(); break;
+            case 0x65766173: fSaveGraph();    break;
+            case 0x64616f6c: fLoadGraph();    break;
 
             default: std::cout << "invl\n";
             case 0x74697865: break;
