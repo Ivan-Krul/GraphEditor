@@ -116,6 +116,8 @@ void fNewEdge() {
 
 
 void fList() {
+    if (graph.empty()) return;
+
     auto& cur = graph[nod_origin_index];
 
     size_t nod_to;
@@ -352,6 +354,38 @@ void fSaveGraph() {
     executePythonScript("save_" + file + ".py", inp);
 }
 
+void parseCache() {
+    std::ifstream fin;
+    fin.open("graph");
+
+    size_t count = 0;
+
+    fin >> count;
+
+    graph.resize(count);
+    name_map.reserve(count);
+
+    for (size_t i = 0; i < graph.size(); i++) {
+        auto& node = graph[i];
+
+        std::getline(fin, node.name);
+        name_map.insert(std::make_pair(node.name, i));
+
+        fin >> count;
+
+        node.edge.resize(count);
+
+        for (size_t j = 0; j < node.edge.size(); j++) {
+            auto& edge = node.edge[j];
+
+            fin >> edge.indx_from >> edge.indx_to >> edge.cost;
+        }
+    }
+
+    fin.close();
+    std::remove("graph");
+}
+
 void fLoadGraph() {
     std::string file;
 
@@ -359,6 +393,15 @@ void fLoadGraph() {
 
     std::cout << "load by: ";
     std::getline(std::cin >> std::ws, file);
+
+    std::cout << "save as (filename): ";
+    std::getline(std::cin >> std::ws, inp);
+
+    executePythonScript("load_" + file + ".py", inp);
+
+    parseCache();
+
+    nod_origin_index = 0;
 }
 
 

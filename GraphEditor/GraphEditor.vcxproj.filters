@@ -20,6 +20,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\save_graph_raw.py" />
+    <None Include="save_python.py" />
+    <None Include="save_2_list.py" />
   </ItemGroup>
 </Project>

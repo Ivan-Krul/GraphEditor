@@ -1,0 +1,1 @@
+[{'name': 'A', 'edge': [{'indx_from': 0, 'indx_to': 1, 'cost': 2.3}, {'indx_from': 0, 'indx_to': 2, 'cost': 6.4}]}, {'name': 'B', 'edge': [{'indx_from': 1, 'indx_to': 0, 'cost': 2.3}]}, {'name': 'C', 'edge': [{'indx_from': 2, 'indx_to': 0, 'cost': 6.4}]}]
