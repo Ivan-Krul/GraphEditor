@@ -294,25 +294,38 @@ void getPythonPaths() {
 
 void generateSaveCache() {
     std::ofstream fout;
-    size_t dir;
+    size_t org;
+    size_t dir;  
 
     fout.open("graph");
 
-    fout << graph.size() << '\n';
+    fout << '[';
 
     for (size_t i = 0; i < graph.size(); i++) {
         auto& node_edges = graph[i].edge;
 
-        fout << graph[i].name << '\n' << node_edges.size() << '\n';
+        fout << "{'name': '" << graph[i].name << "', 'edge': [";
 
         for (size_t j = 0; j < node_edges.size(); j++) {
+            org = i;
+
             dir = (node_edges[j].indx_from == i)
                 ? node_edges[j].indx_to
                 : node_edges[j].indx_from;
 
-            fout << dir << '\n' << node_edges[j].cost << '\n';
+            fout << "{'indx_from': " << org << ", 'indx_to': " << dir << ", 'cost': " << node_edges[j].cost << "}";
+
+            if (j < (node_edges.size() - 1))
+                fout << ", ";
         }
+
+        fout << "]}";
+
+        if (i < (graph.size() - 1))
+            fout << ", ";
+            
     }
+    fout << ']';
 
     fout.close();
 }
@@ -336,12 +349,16 @@ void fSaveGraph() {
 
     generateSaveCache();
 
-    executePythonScript(file, inp);
+    executePythonScript("save_" + file + ".py", inp);
 }
 
-
 void fLoadGraph() {
+    std::string file;
 
+    getPythonPaths();
+
+    std::cout << "load by: ";
+    std::getline(std::cin >> std::ws, file);
 }
 
 
