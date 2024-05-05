@@ -368,6 +368,8 @@ void fSaveGraph() {
     generateSaveCache();
 
     executePythonScript("save_" + file + ".py", inp);
+
+    inp = "";
 }
 
 void parseCache() {
@@ -430,6 +432,7 @@ void fLoadGraph() {
     parseCache();
 
     nod_origin_index = 0;
+    inp = "";
 }
 
 
