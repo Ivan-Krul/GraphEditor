@@ -5,6 +5,32 @@
 #include <fstream>
 #include <filesystem>
 
+
+#define VERSION "1.0.5"
+
+#if defined(_WIN32) || defined(_WIN64) || \
+    defined(__WIN32__) || defined(__TOS_WIN__) || \
+    defined(__WINDOWS__)
+#    define ENV "windows"
+#elif defined(linux) || defined(__linux) || \
+    defined(__linux__) || defined(__gnu_linux__))
+#    define ENV "linux"
+#elif defined(macintosh) || defined(Macintosh) || \
+    (defined(__APPLE__) && defined(__MACH__)))
+#    define ENV "macos"
+#else
+#    error Unsupported OS
+#endif
+
+#if defined(__x86_64__) || defined(_M_X64)
+#define ARC "x86_64"
+#elif defined(i386) || defined(__i386__) || defined(__i386) || defined(_M_IX86)
+#define ARC "x86_32"
+#else
+#define ARC "arm"
+#endif
+
+
 struct Node;
 
 struct Edge {
@@ -349,7 +375,7 @@ void generateSaveCache() {
 }
 
 void executePythonScript(const std::string& pythonname, const std::string& filename) {
-    if (system(("python " + pythonname + " \"" + filename + "\"").c_str())) {
+    if (system(("python3 " + pythonname + " \"" + filename + "\"").c_str())) {
         std::cout << "something went wrong with python script\n";
     }
 }
@@ -436,20 +462,74 @@ void fLoadGraph() {
 }
 
 
-bool isPythonMissing() {
-    return system("python --version");
+void fHelp() {
+    std::cout << "Graph Editor is a program, which was made for assisting making graphs\n";
+    std::cout << "Commands:\n";
+    std::cout << "\tnewp - create a node\n";
+    std::cout << "\tnewe - create an edge (from origin to...)\n";
+    std::cout << "\tseto - set origin node (to...)\n";
+    std::cout << "\tremp - remove a node and removing all references to the node (is...)\n";
+    std::cout << "\treme - remove an edge between origin and a node (from origin to...)\n";
+    std::cout << "\tlist - listing all nodes and costs which are adjacent to the origin node\n";
+    std::cout << "\tdict - shows a dictionary of names and it's translation to their indexes\n";
+    std::cout << "\tsave - saves graph in .grf using custom Python scripts\n";
+    std::cout << "\tload - loads graph from .grf using custom Python scripts\n";
+    std::cout << "\tclir - clears the screen\n";
+    std::cout << "\trset - resets graph to empty graph\n";
+    std::cout << "\texit - exit\n";
+
+    std::cout << '\n';
+    std::cout << "Also exists custom arguments:\n";
+    std::cout << "\t[--version | -v] - get a version\n";
+    std::cout << "\t[-d] - enter to debug mode (cache wouldn't be erased)\n";
+    std::cout << '\n';
+
 }
 
-int main(const int args, const char* argv[]) {
-    if (args > 1)
-        if (argv[1] == "-d")
+
+void fClear() {
+#ifdef _WIN32
+    system("cls");
+#else
+    system("clear");
+#endif
+}
+
+
+void fReset() {
+    graph.clear();
+    name_map.clear();
+
+    std::cout << "resetd\n";
+}
+
+
+bool isPythonMissing() {
+    return system("python3 --version");
+}
+
+int init(const int args, const char* argv[]) {
+    if (args > 1) {
+        if (argv[1] == std::string("--version") || argv[1] == std::string("-v")) {
+            std::cout << "Graph Editor v" << VERSION << "." << ENV << "." << ARC << '\n';
+            return 0;
+        } else if (argv[1] == std::string("-d"))
             debug_flag = true;
+        else {
+            std::cout << "invalid argument" << '\n';
+            return 1;
+        }
+    }
 
 
     if (isPythonMissing()) {
-        std::cout << "python is missing in the enviroument/n";
+        std::cout << "python is missing in the enviroument\n";
         return 1;
     }
+}
+
+int main(const int args, const char* argv[]) {
+    if (init(args, argv)) return 1;
 
     while (convertToInt(inp) != 0x74697865) {
         if (nod_origin_index < graph.size())
@@ -473,6 +553,10 @@ int main(const int args, const char* argv[]) {
             case 0x74636964: fDictionPoint(); break;
             case 0x65766173: fSaveGraph();    break;
             case 0x64616f6c: fLoadGraph();    break;
+            case 0x72696c63: fClear();        break;
+            case 0x3f:
+            case 0x706c6568: fHelp();         break;
+            case 0x72657372: fReset();        break;
 
             default: std::cout << "invl\n";
             case 0x74697865: break;
