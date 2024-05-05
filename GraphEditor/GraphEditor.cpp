@@ -33,6 +33,8 @@ std::vector<Node> graph;
 size_t nod_origin_index = 0;
 std::string inp = "";
 
+bool debug_flag = false;
+
 
 void fNewPoint() {
     std::cout << "name: ";
@@ -285,11 +287,25 @@ void fRenamePoint() {
 }
 
 
-void getPythonPaths() {
+enum class PythonPathMethods{
+    save,
+    load
+};
+
+void getPythonPaths(PythonPathMethods method) {
     std::cout << "list of saved files:\n";
-    for (const auto& ls : std::filesystem::directory_iterator()) {
+
+    std::string stem;
+
+    for (const auto& ls : std::filesystem::directory_iterator(".")) {
         if (ls.path().extension().string() == ".py") {
-            std::cout << ls.path().filename().string() << '\n';
+            stem = ls.path().stem().string();
+
+            if ((stem.substr(0, 4) == "save") == (method == PythonPathMethods::save)) {
+                stem.erase(stem.begin(), stem.begin() + 5);
+
+                std::cout << stem << '\n';
+            }
         }
     }
 }
@@ -341,7 +357,7 @@ void executePythonScript(const std::string& pythonname, const std::string& filen
 void fSaveGraph() {
     std::string file;
 
-    getPythonPaths();
+    getPythonPaths(PythonPathMethods::save);
 
     std::cout << "save by: ";
     std::getline(std::cin >> std::ws, file);
@@ -368,7 +384,14 @@ void parseCache() {
     for (size_t i = 0; i < graph.size(); i++) {
         auto& node = graph[i];
 
-        std::getline(fin, node.name);
+        fin >> count;
+
+        node.name.resize(count + 1);
+
+        fin.read(node.name.data(), count + 1);
+
+        node.name.erase(node.name.begin());
+
         name_map.insert(std::make_pair(node.name, i));
 
         fin >> count;
@@ -383,18 +406,23 @@ void parseCache() {
     }
 
     fin.close();
-    std::remove("graph");
+
+    if(!debug_flag)
+        std::remove("graph");
 }
 
 void fLoadGraph() {
+    graph.clear();
+    name_map.clear();
+
     std::string file;
 
-    getPythonPaths();
+    getPythonPaths(PythonPathMethods::load);
 
     std::cout << "load by: ";
     std::getline(std::cin >> std::ws, file);
 
-    std::cout << "save as (filename): ";
+    std::cout << "load as (filename): ";
     std::getline(std::cin >> std::ws, inp);
 
     executePythonScript("load_" + file + ".py", inp);
@@ -409,7 +437,12 @@ bool isPythonMissing() {
     return system("python --version");
 }
 
-int main() {
+int main(const int args, const char* argv[]) {
+    if (args > 1)
+        if (argv[1] == "-d")
+            debug_flag = true;
+
+
     if (isPythonMissing()) {
         std::cout << "python is missing in the enviroument/n";
         return 1;

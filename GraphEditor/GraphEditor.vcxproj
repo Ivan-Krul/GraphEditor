@@ -134,6 +134,8 @@
     <ClCompile Include="GraphEditor.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="load_2_list.py" />
+    <None Include="load_python.py" />
     <None Include="save_2_list.py" />
     <None Include="save_python.py" />
   </ItemGroup>
