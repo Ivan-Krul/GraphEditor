@@ -26,7 +26,9 @@ Also exists custom arguments:
 	[--version | -v]  - get a version
 	[-d]              - enter to debug mode (cache wouldn't be erased)
 	[-h | --help]     - shows help for navigating the program
-	[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))
+	[--argument | -a] - enter to argument mode (you can write all commands in
+                  arguments separated by space (for names as indexes you have to
+				  type 'n' and space before actual name))
 ```
 
 Installing
