@@ -13,10 +13,10 @@
     defined(__WINDOWS__)
 #    define ENV "windows"
 #elif defined(linux) || defined(__linux) || \
-    defined(__linux__) || defined(__gnu_linux__))
+    defined(__linux__) || defined(__gnu_linux__)
 #    define ENV "linux"
 #elif defined(macintosh) || defined(Macintosh) || \
-    (defined(__APPLE__) && defined(__MACH__)))
+    (defined(__APPLE__) && defined(__MACH__))
 #    define ENV "macos"
 #else
 #    error Unsupported OS
