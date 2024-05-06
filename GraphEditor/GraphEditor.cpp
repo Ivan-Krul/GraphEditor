@@ -12,6 +12,7 @@
     defined(__WIN32__) || defined(__TOS_WIN__) || \
     defined(__WINDOWS__)
 #    define ENV "windows"
+#    define Windows
 #elif defined(linux) || defined(__linux) || \
     defined(__linux__) || defined(__gnu_linux__)
 #    define ENV "linux"
@@ -104,7 +105,7 @@ size_t getNode() {
         */
 
     } while (not_inter && (iter == name_map.end() || iter->second == nod_origin_index));
-    
+
     return not_inter
         ? iter->second
         : -1;
@@ -131,8 +132,7 @@ void fNewEdge() {
         if ((edg.indx_to = getNode()) == -1) { interupted(); return; }
 
         embedEdge(edg);
-    }
-    else if(inp[0] == 'n') {
+    } else if (inp[0] == 'n') {
         Edge edg;
         edg.indx_from = nod_origin_index;
 
@@ -211,7 +211,7 @@ void removeRefs(size_t targt) {
             0   0
         */
 
-        for(j = 0; j < edges_edges.size(); j++) {
+        for (j = 0; j < edges_edges.size(); j++) {
             if (edges_edges[j].indx_from == targt || edges_edges[j].indx_to == targt) {
                 edges_edges.erase(edges_edges.begin() + j);
                 break;
@@ -251,7 +251,7 @@ void fRemovePoint() {
         while ((std::cin >> targt, targt) >= graph.size());
 
         if (nod_origin_index >= targt) nod_origin_index--;
-        
+
         removeAllReference(targt);
     }
 }
@@ -259,7 +259,7 @@ void fRemovePoint() {
 
 void fDictionPoint() {
     for (auto& a : name_map) {
-        std::cout <<'"' << a.first << "\": " << a.second << '\n';
+        std::cout << '"' << a.first << "\": " << a.second << '\n';
     }
 }
 
@@ -313,7 +313,7 @@ void fRenamePoint() {
 }
 
 
-enum class PythonPathMethods{
+enum class PythonPathMethods {
     save,
     load
 };
@@ -339,7 +339,7 @@ void getPythonPaths(PythonPathMethods method) {
 void generateSaveCache() {
     std::ofstream fout;
     size_t org;
-    size_t dir;  
+    size_t dir;
 
     fout.open("graph");
 
@@ -367,7 +367,6 @@ void generateSaveCache() {
 
         if (i < (graph.size() - 1))
             fout << ", ";
-            
     }
     fout << ']';
 
@@ -375,7 +374,17 @@ void generateSaveCache() {
 }
 
 void executePythonScript(const std::string& pythonname, const std::string& filename) {
-    if (system(("python3 " + pythonname + " \"" + filename + "\"").c_str())) {
+    int exitRet = 0;
+
+#ifdef Windows
+    exitRet = system(("python " + pythonname + " \"" + filename + "\"").c_str())
+#else
+    system(("python3 " + pythonname + " \"" + filename + "\"").c_str())
+#endif
+        ;
+
+
+    if (exitRet) {
         std::cout << "something went wrong with python script\n";
     }
 }
@@ -435,7 +444,7 @@ void parseCache() {
 
     fin.close();
 
-    if(!debug_flag)
+    if (!debug_flag)
         std::remove("graph");
 }
 
@@ -488,7 +497,7 @@ void fHelp() {
 
 
 void fClear() {
-#ifdef _WIN32
+#ifdef Windows
     system("cls");
 #else
     system("clear");
@@ -505,14 +514,20 @@ void fReset() {
 
 
 bool isPythonMissing() {
-    return system("python3 --version");
+    return system(
+#ifdef Windows
+        "python --version"
+#else 
+        "python3 --version"
+#endif
+    );
 }
 
 int init(const int args, const char* argv[]) {
     if (args > 1) {
         if (argv[1] == std::string("--version") || argv[1] == std::string("-v")) {
             std::cout << "Graph Editor v" << VERSION << "." << ENV << "." << ARC << '\n';
-            return 0;
+            return 2;
         } else if (argv[1] == std::string("-d"))
             debug_flag = true;
         else {
@@ -526,10 +541,13 @@ int init(const int args, const char* argv[]) {
         std::cout << "python is missing in the enviroument\n";
         return 1;
     }
+
+    return 0;
 }
 
 int main(const int args, const char* argv[]) {
-    if (init(args, argv)) return 1;
+    int argRet = init(args, argv);
+    if (argRet > 0) return 2 - argRet;
 
     while (convertToInt(inp) != 0x74697865) {
         if (nod_origin_index < graph.size())
@@ -556,7 +574,7 @@ int main(const int args, const char* argv[]) {
             case 0x72696c63: fClear();        break;
             case 0x3f:
             case 0x706c6568: fHelp();         break;
-            case 0x72657372: fReset();        break;
+            case 0x74657372: fReset();        break;
 
             default: std::cout << "invl\n";
             case 0x74697865: break;
@@ -564,6 +582,6 @@ int main(const int args, const char* argv[]) {
         } catch (const std::exception e) {
             std::cout << "excp: " << e.what() << '\n';
         }
-        
+
     }
 }
