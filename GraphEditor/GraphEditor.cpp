@@ -4,6 +4,8 @@
 #include <unordered_map>
 #include <fstream>
 #include <filesystem>
+#include <sstream>
+#include <queue>
 
 
 #define VERSION "1.0.5"
@@ -51,7 +53,7 @@ inline int convertToInt(const std::string& str) {
 }
 
 inline void interupted() {
-    std::cout << "intr\n";
+    std::cout << "interrupted\n";
 }
 
 
@@ -61,11 +63,25 @@ size_t nod_origin_index = 0;
 std::string inp = "";
 
 bool debug_flag = false;
+bool argument_flag = false;
+
+
+std::queue<std::string> arg_input_queue;
+
+
+void inputNodeName() {
+    if (argument_flag) {
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    } else {
+        std::cout << "name: ";
+        std::getline(std::cin >> std::ws, inp);
+    }
+}
 
 
 void fNewPoint() {
-    std::cout << "name: ";
-    std::getline(std::cin >> std::ws, inp);
+    inputNodeName();
 
     Node nd;
     nd.name = inp;
@@ -77,53 +93,59 @@ void fNewPoint() {
 
 size_t getNode() {
     auto iter = name_map.begin();
-    auto not_inter = true;
 
-    do {
+    if (!argument_flag) {
+        auto not_inter = true;
+        do {
+            inputNodeName();
 
-        std::cout << "name: ";
-        std::getline(std::cin >> std::ws, inp);
+            if (inp.empty())
+                not_inter = false;
+            else
+                iter = name_map.find(inp);
 
-        if (inp.empty())
-            not_inter = false;
-        else
-            iter = name_map.find(inp);
+        } while (not_inter && (iter == name_map.end() || iter->second == nod_origin_index));
 
-        /*
-            a b c    x
-            0 0 0 -> 0 c
-            1 0 0 -> 0 c
-            0 1 0 -> 0 c
-            1 1 0 -> 0 c
-            0 0 1 -> 0
-            1 0 1 -> 1 (a | b)
-            0 1 1 -> 1 (a | b)
-            1 1 1 -> 1 (a | b)
+        return not_inter
+            ? iter->second
+            : -1;
+    } else {
+        inputNodeName();
+        iter = name_map.find(inp);
 
-            c & (a | b)
-
-        */
-
-    } while (not_inter && (iter == name_map.end() || iter->second == nod_origin_index));
-
-    return not_inter
-        ? iter->second
-        : -1;
+        return !(iter == name_map.end() || iter->second == nod_origin_index)
+            ? iter->second
+            : -1;
+    }
 }
 
+
 void embedEdge(Edge& edg) {
-    std::cout << "cost: ";
-    std::cin >> edg.cost;
+    if (argument_flag) {
+        edg.cost = std::stof(arg_input_queue.front());
+        arg_input_queue.pop();
+    } else {
+        std::cout << "cost: ";
+        std::cin >> edg.cost;
+    }
 
     graph[edg.indx_from].edge.push_back(edg);
     graph[edg.indx_to].edge.push_back(edg);
 }
 
+void giveChoiceUseNameAsIndex() {
+    if (argument_flag) {
+        inp = (arg_input_queue.front()[0] == 'n') ? "Y" : "n";
+    } else {
+        std::cout << "use name as index(Y/n): ";
+        std::cin >> inp;
+    }
+}
+
 void fNewEdge() {
     if (graph.size() < 2) return;
 
-    std::cout << "use name as index(Y/n): ";
-    std::cin >> inp;
+    giveChoiceUseNameAsIndex();
 
     if (inp[0] == 'Y') {
         Edge edg;
@@ -136,7 +158,17 @@ void fNewEdge() {
         Edge edg;
         edg.indx_from = nod_origin_index;
 
-        while ((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index);
+        if (argument_flag) {
+            edg.indx_to = std::stoi(arg_input_queue.front());
+            arg_input_queue.pop();
+
+            if (edg.indx_to >= graph.size() && edg.indx_to == nod_origin_index) {
+                std::cout << "index is out of range\n";
+                exit(1);
+            }
+        }
+        else
+            while ((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index);
 
         embedEdge(edg);
     }
@@ -171,8 +203,7 @@ void fSetOrigin() {
     if (graph.size() == 1) nod_origin_index = 0;
     if (graph.size() < 2) return;
 
-    std::cout << "use name as index(Y/n): ";
-    std::cin >> inp;
+    giveChoiceUseNameAsIndex();
 
     if (inp[0] == 'Y') {
         if ((nod_origin_index = getNode()) == -1) {
@@ -181,7 +212,16 @@ void fSetOrigin() {
             return;
         }
     } else if (inp[0] == 'n') {
-        while ((std::cin >> nod_origin_index, nod_origin_index) >= graph.size());
+        if (argument_flag) {
+            nod_origin_index = std::stoi(arg_input_queue.front());
+            arg_input_queue.pop();
+
+            if (nod_origin_index >= graph.size()) {
+                std::cout << "index is out of range\n";
+                exit(1);
+            }
+        } else
+            while ((std::cin >> nod_origin_index, nod_origin_index) >= graph.size());
     }
 }
 
@@ -235,8 +275,7 @@ void fRemovePoint() {
     if (graph.size() == 1) graph.pop_back();
     if (graph.empty()) return;
 
-    std::cout << "use name as index(Y/n): ";
-    std::cin >> inp;
+    giveChoiceUseNameAsIndex();
 
     size_t targt;
 
@@ -248,7 +287,16 @@ void fRemovePoint() {
         removeAllReference(targt);
 
     } else if (inp[0] == 'n') {
-        while ((std::cin >> targt, targt) >= graph.size());
+        if (argument_flag) {
+            targt = std::stoi(arg_input_queue.front());
+            arg_input_queue.pop();
+
+            if (targt >= graph.size()) {
+                std::cout << "index is out of range\n";
+                exit(1);
+            }
+        } else
+            while ((std::cin >> targt, targt) >= graph.size());
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
@@ -284,8 +332,7 @@ void fRemoveEdge() {
     if (graph[nod_origin_index].edge.size() == 1) graph[nod_origin_index].edge.pop_back();
     if (graph[nod_origin_index].edge.empty()) return;
 
-    std::cout << "use name as index(Y/n): ";
-    std::cin >> inp;
+    giveChoiceUseNameAsIndex();
 
     size_t targt;
 
@@ -295,7 +342,16 @@ void fRemoveEdge() {
         removeEdgeFromNodes(targt);
 
     } else if (inp[0] == 'n') {
-        while ((std::cin >> targt, targt) >= graph.size());
+        if (argument_flag) {
+            nod_origin_index = std::stoi(arg_input_queue.front());
+            arg_input_queue.pop();
+
+            if (nod_origin_index >= graph.size()) {
+                std::cout << "index is out of range\n";
+                exit(1);
+            }
+        } else
+            while ((std::cin >> targt, targt) >= graph.size());
 
         removeEdgeFromNodes(targt);
     }
@@ -303,8 +359,7 @@ void fRemoveEdge() {
 
 
 void fRenamePoint() {
-    std::cout << "new name: ";
-    std::getline(std::cin >> std::ws, inp);
+    inputNodeName();
 
     name_map.erase(graph[nod_origin_index].name);
     graph[nod_origin_index].name = inp;
@@ -319,6 +374,8 @@ enum class PythonPathMethods {
 };
 
 void getPythonPaths(PythonPathMethods method) {
+    if (argument_flag) return;
+
     std::cout << "list of saved files:\n";
 
     std::string stem;
@@ -389,16 +446,28 @@ void executePythonScript(const std::string& pythonname, const std::string& filen
     }
 }
 
+void inputFileProperty(std::string& file) {
+    if (argument_flag) {
+        file = arg_input_queue.front();
+        arg_input_queue.pop();
+
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    } else {
+        std::cout << "load by: ";
+        std::getline(std::cin >> std::ws, file);
+
+        std::cout << "load as (filename): ";
+        std::getline(std::cin >> std::ws, inp);
+    }
+}
+
 void fSaveGraph() {
     std::string file;
 
     getPythonPaths(PythonPathMethods::save);
 
-    std::cout << "save by: ";
-    std::getline(std::cin >> std::ws, file);
-
-    std::cout << "save as (filename): ";
-    std::getline(std::cin >> std::ws, inp);
+    inputFileProperty(file);
 
     generateSaveCache();
 
@@ -456,11 +525,7 @@ void fLoadGraph() {
 
     getPythonPaths(PythonPathMethods::load);
 
-    std::cout << "load by: ";
-    std::getline(std::cin >> std::ws, file);
-
-    std::cout << "load as (filename): ";
-    std::getline(std::cin >> std::ws, inp);
+    inputFileProperty(file);
 
     executePythonScript("load_" + file + ".py", inp);
 
@@ -497,6 +562,7 @@ void fHelp() {
 
 
 void fClear() {
+    if (argument_flag) return;
 #ifdef Windows
     system("cls");
 #else
@@ -508,8 +574,6 @@ void fClear() {
 void fReset() {
     graph.clear();
     name_map.clear();
-
-    std::cout << "resetd\n";
 }
 
 
@@ -523,16 +587,17 @@ bool isPythonMissing() {
     );
 }
 
-int init(const int args, const char* argv[]) {
+int init(const int args, const char* argv[], size_t& arg_count) {
     if (args > 1) {
-        if (argv[1] == std::string("--version") || argv[1] == std::string("-v")) {
+        if (argv[arg_count] == std::string("--version") || argv[arg_count] == std::string("-v")) {
             std::cout << "Graph Editor v" << VERSION << "." << ENV << "." << ARC << '\n';
             return 2;
-        } else if (argv[1] == std::string("-d"))
+        } else if (argv[arg_count] == std::string("-d")) {
             debug_flag = true;
-        else {
-            std::cout << "invalid argument" << '\n';
-            return 1;
+            arg_count++;
+        } else if (argv[arg_count] == std::string("-a") || argv[arg_count] == std::string("--argument")) {
+            argument_flag = true;
+            arg_count++;
         }
     }
 
@@ -545,10 +610,63 @@ int init(const int args, const char* argv[]) {
     return 0;
 }
 
-int main(const int args, const char* argv[]) {
-    int argRet = init(args, argv);
-    if (argRet > 0) return 2 - argRet;
+void executeIntCommand(int input) {
+    try {
+        switch (input) {
+        case 0x7077656e: fNewPoint();     break;
+        case 0x6577656e: fNewEdge();      break;
+        case 0x6f746573: fSetOrigin();    break;
+        case 0x706d6572: fRemovePoint();  break;
+        case 0x656d6572: fRemoveEdge();   break;
+        case 0x6d6e6572: fRenamePoint();  break;
+        case 0x7473696c: fList();         break;
+        case 0x74636964: fDictionPoint(); break;
+        case 0x65766173: fSaveGraph();    break;
+        case 0x64616f6c: fLoadGraph();    break;
+        case 0x72696c63: fClear();        break;
+        case 0x3f:
+        case 0x706c6568: fHelp();         break;
+        case 0x74657372: fReset();        break;
 
+        default: std::cout << "invl\n";
+        case 0x74697865: break;
+        }
+    } catch (const std::exception e) {
+        std::cout << "excp: " << e.what() << '\n';
+    }
+}
+
+int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
+    for (size_t i = arg_count; i < args; i++) {
+        if (debug_flag) {
+            std::cout << '"' << argv[i] << "\"\n";
+        }
+        arg_input_queue.push(argv[i]);
+    }
+
+    const size_t count = args - arg_count;
+
+    while(arg_input_queue.size() > 1) {
+        std::cout << count - arg_input_queue.size() << '|';
+        if (arg_input_queue.front() == "-i") {
+            arg_input_queue.pop();
+            fLoadGraph();
+        }
+        else if (arg_input_queue.front() == "-o") {
+            arg_input_queue.pop();
+            fSaveGraph();
+        }
+        else {
+            int num = convertToInt(arg_input_queue.front());
+            arg_input_queue.pop();
+            executeIntCommand(num);
+        }
+    }
+
+    return 0;
+}
+
+int enterManualMode() {
     while (convertToInt(inp) != 0x74697865) {
         if (nod_origin_index < graph.size())
             std::cout << '"' << graph[nod_origin_index].name.c_str() << '"';
@@ -558,30 +676,19 @@ int main(const int args, const char* argv[]) {
         std::cout << " inp: ";
         std::cin >> inp;
 
-
-        try {
-            switch (convertToInt(inp)) {
-            case 0x7077656e: fNewPoint();     break;
-            case 0x6577656e: fNewEdge();      break;
-            case 0x6f746573: fSetOrigin();    break;
-            case 0x706d6572: fRemovePoint();  break;
-            case 0x656d6572: fRemoveEdge();   break;
-            case 0x6d6e6572: fRenamePoint();  break;
-            case 0x7473696c: fList();         break;
-            case 0x74636964: fDictionPoint(); break;
-            case 0x65766173: fSaveGraph();    break;
-            case 0x64616f6c: fLoadGraph();    break;
-            case 0x72696c63: fClear();        break;
-            case 0x3f:
-            case 0x706c6568: fHelp();         break;
-            case 0x74657372: fReset();        break;
-
-            default: std::cout << "invl\n";
-            case 0x74697865: break;
-            }
-        } catch (const std::exception e) {
-            std::cout << "excp: " << e.what() << '\n';
-        }
-
+        executeIntCommand(convertToInt(inp));
     }
+
+    return 0;
+}
+
+int main(const int args, const char* argv[]) {
+    size_t arg_count = 1;
+
+    int argRet = init(args, argv, arg_count);
+    if (argRet > 0 && !argument_flag) return 2 - argRet;
+
+    return argument_flag
+        ? enterArgumentMode(args, argv, arg_count)
+        : enterManualMode();
 }
