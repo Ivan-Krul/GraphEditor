@@ -9,26 +9,26 @@ Help
 ===============
 ```
 Commands:
-	newp - create a node
-	newe - create an edge (from origin to...)
-	seto - set origin node (to...)
-	remp - remove a node and removing all references to the node (is...)
-	reme - remove an edge between origin and a node (from origin to...)
-	list - listing all nodes and costs which are adjacent to the origin node
-	dict - shows a dictionary of names and it's translation to their indexes
-	save - saves graph in .grf using custom Python scripts
-	load - loads graph from .grf using custom Python scripts
-	clir - clears the screen
-	rset - resets graph to empty graph
-	exit - exit
+    newp - create a node
+    newe - create an edge (from origin to...)
+    seto - set origin node (to...)
+    remp - remove a node and removing all references to the node (is...)
+    reme - remove an edge between origin and a node (from origin to...)
+    list - listing all nodes and costs which are adjacent to the origin node
+    dict - shows a dictionary of names and it's translation to their indexes
+    save - saves graph in .grf using custom Python scripts
+    load - loads graph from .grf using custom Python scripts
+    clir - clears the screen
+    rset - resets graph to empty graph
+    exit - exit
 
 Also exists custom arguments:
-	[--version | -v]  - get a version
-	[-d]              - enter to debug mode (cache wouldn't be erased)
-	[-h | --help]     - shows help for navigating the program
-	[--argument | -a] - enter to argument mode (you can write all commands in
+    [--version | -v]  - get a version
+    [-d]              - enter to debug mode (cache wouldn't be erased)
+    [-h | --help]     - shows help for navigating the program
+    [--argument | -a] - enter to argument mode (you can write all commands in
                   arguments separated by space (for names as indexes you have to
-				  type 'n' and space before actual name))
+                  type 'n' and space before actual name))
 ```
 
 Installing
