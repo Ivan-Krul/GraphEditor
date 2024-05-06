@@ -8,7 +8,7 @@
 #include <queue>
 
 
-#define VERSION "1.0.5"
+#define VERSION "1.1.0"
 
 #if defined(_WIN32) || defined(_WIN64) || \
     defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -196,6 +196,16 @@ void fList() {
         std::cout << " -> " << cur.edge[i].cost << '\n';
     }
 
+}
+
+
+void fListAll() {
+    size_t old_origin = nod_origin_index;
+    std::cout << "Size: " << graph.size() << " nodes\n";
+    for (size_t i = 0; i < graph.size(); i++) {
+        nod_origin_index = i;
+        fList();
+    }
 }
 
 
@@ -554,8 +564,10 @@ void fHelp() {
 
     std::cout << '\n';
     std::cout << "Also exists custom arguments:\n";
-    std::cout << "\t[--version | -v] - get a version\n";
-    std::cout << "\t[-d] - enter to debug mode (cache wouldn't be erased)\n";
+    std::cout << "\t[--version | -v]  - get a version\n";
+    std::cout << "\t[-d]              - enter to debug mode (cache wouldn't be erased)\n";
+    std::cout << "\t[-h | --help]     - shows help for navigating the program\n";
+    std::cout << "\t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))\n";
     std::cout << '\n';
 
 }
@@ -595,6 +607,9 @@ int init(const int args, const char* argv[], size_t& arg_count) {
         } else if (argv[arg_count] == std::string("-d")) {
             debug_flag = true;
             arg_count++;
+        } else if (argv[arg_count] == std::string("-h") || argv[arg_count] == std::string("--help")) {
+            fHelp();
+            return 2;
         } else if (argv[arg_count] == std::string("-a") || argv[arg_count] == std::string("--argument")) {
             argument_flag = true;
             arg_count++;
@@ -627,6 +642,7 @@ void executeIntCommand(int input) {
         case 0x3f:
         case 0x706c6568: fHelp();         break;
         case 0x74657372: fReset();        break;
+        case 0x6174736c: fListAll();      break;
 
         default: std::cout << "invl\n";
         case 0x74697865: break;
@@ -646,8 +662,8 @@ int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
 
     const size_t count = args - arg_count;
 
-    while(arg_input_queue.size() > 1) {
-        std::cout << count - arg_input_queue.size() << '|';
+    while(arg_input_queue.size()) {
+        std::cout << count - arg_input_queue.size() << ' ';
         if (arg_input_queue.front() == "-i") {
             arg_input_queue.pop();
             fLoadGraph();
