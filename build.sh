@@ -2,7 +2,7 @@ dest="bin"
 
 debug=""
 
-read -p "is it for 32-bit architecture?(Y/n): " $debug 
+read -p "is it for 32-bit architecture?(Y/n): " $debug
 
 mkdir $dest
 
