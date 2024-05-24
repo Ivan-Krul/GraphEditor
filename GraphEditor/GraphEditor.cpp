@@ -148,14 +148,14 @@ void fNewEdge() {
     giveChoiceUseNameAsIndex();
 
     if (inp[0] == 'Y') {
-        Edge edg;
+        Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
         if ((edg.indx_to = getNode()) == -1) { interupted(); return; }
 
         embedEdge(edg);
     } else if (inp[0] == 'n') {
-        Edge edg;
+        Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
         if (argument_flag) {
@@ -344,7 +344,7 @@ void fRemoveEdge() {
 
     giveChoiceUseNameAsIndex();
 
-    size_t targt;
+    size_t targt = 0;
 
     if (inp[0] == 'Y') {
         if ((targt = getNode()) == -1) { interupted(); return; }
@@ -491,40 +491,53 @@ void parseCache() {
     fin.open("graph");
 
     size_t count = 0;
-
     fin >> count;
 
     graph.resize(count);
     name_map.reserve(count);
 
-    for (size_t i = 0; i < graph.size(); i++) {
-        auto& node = graph[i];
+    for (size_t n = 0; n < graph.size(); n++) {
+        auto& node = graph[n];
 
-        fin >> count;
-
-        node.name.resize(count + 1);
-
-        fin.read(node.name.data(), count + 1);
-
-        node.name.erase(node.name.begin());
-
-        name_map.insert(std::make_pair(node.name, i));
+        std::getline(fin, node.name);
+        std::getline(fin, node.name);
+        name_map.insert({ node.name, n });
 
         fin >> count;
 
         node.edge.resize(count);
 
-        for (size_t j = 0; j < node.edge.size(); j++) {
-            auto& edge = node.edge[j];
-
+        for (size_t e = 0; e < node.edge.size(); e++) {
+            auto& edge = node.edge[e];
             fin >> edge.indx_from >> edge.indx_to >> edge.cost;
         }
     }
 
     fin.close();
 
+#ifndef _DEBUG
     if (!debug_flag)
         std::remove("graph");
+#endif
+}
+
+void generateTempCache() {
+    std::ofstream fout;
+    fout.open("graph");
+    
+    fout << graph.size();
+    for (size_t n = 0; n < graph.size(); n++) {
+        auto& node = graph[n];
+
+        fout << '\n' << node.name << '\n' << node.edge.size();
+
+        for (size_t e = 0; e < node.edge.size(); e++) {
+            auto& edge = node.edge[e];
+            fout << ' ' << edge.indx_from << ' ' << edge.indx_to << ' ' << edge.cost;
+        }
+    }
+
+    fout.close();
 }
 
 void fLoadGraph() {
@@ -644,11 +657,36 @@ void executeIntCommand(int input) {
         case 0x74657372: fReset();        break;
         case 0x6174736c: fListAll();      break;
 
-        default: std::cout << "invl\n";
+        default: std::cout << "invl\n"; [[fallthrough]];
         case 0x74697865: break;
         }
     } catch (const std::exception e) {
         std::cout << "excp: " << e.what() << '\n';
+    }
+}
+
+void loopArgumentInputQueue(const size_t arg_queue_size) {
+    while (arg_input_queue.size()) {
+        std::cout << arg_queue_size - arg_input_queue.size() << ' ';
+        if (arg_input_queue.front() == "-i") {
+            arg_input_queue.pop();
+            fLoadGraph();
+        } else if (arg_input_queue.front() == "-o") {
+            arg_input_queue.pop();
+            fSaveGraph();
+        } else if (arg_input_queue.front() == "--temp") {
+            arg_input_queue.pop();
+            if (arg_input_queue.front() == "o")
+                generateTempCache();
+            else if (arg_input_queue.front() == "i")
+                parseCache();
+
+            arg_input_queue.pop();
+        } else {
+            int num = convertToInt(arg_input_queue.front());
+            arg_input_queue.pop();
+            executeIntCommand(num);
+        }
     }
 }
 
@@ -660,26 +698,23 @@ int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
         arg_input_queue.push(argv[i]);
     }
 
-    const size_t count = args - arg_count;
-
-    while(arg_input_queue.size()) {
-        std::cout << count - arg_input_queue.size() << ' ';
-        if (arg_input_queue.front() == "-i") {
-            arg_input_queue.pop();
-            fLoadGraph();
-        }
-        else if (arg_input_queue.front() == "-o") {
-            arg_input_queue.pop();
-            fSaveGraph();
-        }
-        else {
-            int num = convertToInt(arg_input_queue.front());
-            arg_input_queue.pop();
-            executeIntCommand(num);
-        }
-    }
+    loopArgumentInputQueue(args - arg_count);
 
     return 0;
+}
+
+void pushInpToArgQueue() {
+    size_t crnt_space = inp.find(' ');
+    size_t prev_space = 0;
+
+    while (crnt_space != inp.npos) {
+        if (crnt_space - prev_space != 1) {
+
+        }
+
+        prev_space = crnt_space;
+        crnt_space = inp.find(' ');
+    }
 }
 
 int enterManualMode() {
@@ -692,7 +727,16 @@ int enterManualMode() {
         std::cout << " inp: ";
         std::cin >> inp;
 
-        executeIntCommand(convertToInt(inp));
+        if(inp.find(' ') == inp.npos)
+            executeIntCommand(convertToInt(inp));
+        else {
+            argument_flag = true;
+
+            pushInpToArgQueue();
+            loopArgumentInputQueue(arg_input_queue.size());
+
+            argument_flag = false;
+        }
     }
 
     return 0;
