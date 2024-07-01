@@ -47,9 +47,15 @@ struct Node {
     std::vector<Edge> edge;
 };
 
+struct Function {
+    std::queue<std::string> input_queue;
+    bool require_cache = false;
+};
+
 
 inline int convertToInt(const std::string& str) {
-    return *(reinterpret_cast<const int*>(str.c_str()));
+    int orig = *(reinterpret_cast<const int*>(str.c_str()));
+    return ((orig & 0xff000000) >> 24) | ((orig & 0xff0000) >> 8) | ((orig & 0xff00) << 8) | ((orig & 0xff) << 24);
 }
 
 inline void interupted() {
@@ -65,7 +71,7 @@ std::string inp = "";
 bool debug_flag = false;
 bool argument_flag = false;
 
-
+std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
 
 
@@ -579,10 +585,13 @@ Commands:\n\
 \tseto - set origin node (to...)\n\
 \tremp - remove a node and removing all references to the node (is...)\n\
 \treme - remove an edge between origin and a node (from origin to...)\n\
+\tremm - rename the current node\n\
 \tlist - listing all nodes and costs which are adjacent to the origin node\n\
 \tdict - shows a dictionary of names and it's translation to their indexes\n\
 \tsave - saves graph in .grf using custom Python scripts\n\
 \tload - loads graph from .grf using custom Python scripts\n\
+\ttmpo - saves as cache for performance\n\
+\ttmpi - loads cache from command 'tmpo' or from 'load' with debug flag\n\
 \tclir - clears the screen\n\
 \trset - resets graph to empty graph\n\
 \texit - exit\n\
@@ -594,9 +603,9 @@ Also exists custom arguments:\n\
 \t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))\n\
 \n\
 In argument mode:\n\
-\t[-i] - alias to \"load\"\
-\t[-o] - alias to \"save\"\
-\t[-temp [i | o]] - save as temporary file or load it for performance";
+\t[-i] - alias to \"load\"\n\
+\t[-o] - alias to \"save\"\n\
+\t[-temp [i | o]] - alias to \"tmpi\" or \"tmpo\"\n";
 }
 
 
@@ -635,6 +644,45 @@ void fSort() {
 }
 
 
+std::queue<std::string> pushInpToQueue(std::string input) {
+    std::queue<std::string> queue;
+    size_t crnt_space = input.find(' ');
+
+    while (crnt_space != input.npos) {
+        if (crnt_space != 1) {
+            queue.push(input.substr(0, crnt_space));
+            input.erase(input.begin(), input.begin() + crnt_space + 1);
+        } else input.erase(input.begin());
+
+        crnt_space = input.find(' ');
+    }
+
+    if (crnt_space != 1) {
+        queue.push(input.substr(0, crnt_space));
+    }
+
+    return queue;
+}
+
+void fNewFunction() {
+    Function func;
+    std::string name;
+
+    std::cout << "Choose a name for a function: ";
+    std::getline(std::cin >> std::ws, name);
+
+    std::cout << "Insert a logic for the function(as for argument mode): ";
+    std::getline(std::cin >> std::ws, inp);
+    func.input_queue = pushInpToQueue(inp);
+
+    std::cout << "Does the function accepts and returns cache?(Y/n): ";
+    std::cin >> inp;
+    func.require_cache = (inp[0] == 'Y');
+
+    functions.insert(std::make_pair(name, func));
+}
+
+
 bool isPythonMissing() {
     return system(
 #ifdef Windows
@@ -647,18 +695,19 @@ bool isPythonMissing() {
 
 int init(const int args, const char* argv[], size_t& arg_count) {
     if (args > 1) {
-        if (argv[arg_count] == std::string("--version") || argv[arg_count] == std::string("-v")) {
+        const char* arg = argv[arg_count];
+        if ((strcmp(arg, "--version") | strcmp(arg, "-v")) == 0) {
             std::cout << "Graph Editor v" << VERSION << "." << ENV << "." << ARC << '\n';
             return 2;
-        } else if (argv[arg_count] == std::string("-d")) {
+        } else if (strcmp(arg, "-d") == 0) {
             debug_flag = true;
-            arg_count++;
-        } else if (argv[arg_count] == std::string("-h") || argv[arg_count] == std::string("--help")) {
+            arg = argv[++arg_count];
+        } else if ((strcmp(arg, "-h") | strcmp(arg, "--help")) == 0) {
             fHelp();
             return 2;
-        } else if (argv[arg_count] == std::string("-a") || argv[arg_count] == std::string("--argument")) {
+        } else if ((strcmp(arg, "-a") | strcmp(arg, "--argument")) == 0) {
             argument_flag = true;
-            arg_count++;
+            arg = argv[++arg_count];
         }
     }
 
@@ -674,25 +723,27 @@ int init(const int args, const char* argv[], size_t& arg_count) {
 void executeIntCommand(int input) {
     try {
         switch (input) {
-        case 0x7077656e: fNewPoint();     break;
-        case 0x6577656e: fNewEdge();      break;
-        case 0x6f746573: fSetOrigin();    break;
-        case 0x706d6572: fRemovePoint();  break;
-        case 0x656d6572: fRemoveEdge();   break;
-        case 0x6d6e6572: fRenamePoint();  break;
-        case 0x7473696c: fList();         break;
-        case 0x74636964: fDictionPoint(); break;
-        case 0x65766173: fSaveGraph();    break;
-        case 0x64616f6c: fLoadGraph();    break;
-        case 0x72696c63: fClear();        break;
-        case 0x74726f73: fSort();         break;
-        case 0x3f:
-        case 0x706c6568: fHelp();         break;
-        case 0x74657372: fReset();        break;
-        case 0x6174736c: fListAll();      break;
+        case 'newp': fNewPoint();         break;
+        case 'newe': fNewEdge();          break;
+        case 'seto': fSetOrigin();        break;
+        case 'remp': fRemovePoint();      break;
+        case 'reme': fRemoveEdge();       break;
+        case 'renm': fRenamePoint();      break;
+        case 'list': fList();             break;
+        case 'dict': fDictionPoint();     break;
+        case 'save': fSaveGraph();        break;
+        case 'load': fLoadGraph();        break;
+        case 'clir': fClear();            break;
+        case 'sort': fSort();             break;
+        case 'tmpo': generateTempCache(); break;
+        case 'tmpi': parseCache(); break;
+        case '?':
+        case 'help': fHelp();             break;
+        case 'rset': fReset();            break;
+        case 'lsta': fListAll();          break;
 
         default: std::cout << "invl\n"; [[fallthrough]];
-        case 0x74697865: break;
+        case 'exit': break;
         }
     } catch (const std::exception e) {
         std::cout << "excp: " << e.what() << '\n';
@@ -737,25 +788,8 @@ int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
     return 0;
 }
 
-void pushInpToArgQueue() {
-    size_t crnt_space = inp.find(' ');
-
-    while (crnt_space != inp.npos) {
-        if (crnt_space != 1) {
-            arg_input_queue.push(inp.substr(0, crnt_space));
-            inp.erase(inp.begin(), inp.begin() + crnt_space + 1);
-        } else inp.erase(inp.begin());
-
-        crnt_space = inp.find(' ');
-    }
-
-    if (crnt_space != 1) {
-        arg_input_queue.push(inp.substr(0, crnt_space));
-    }
-}
-
 int enterManualMode() {
-    while (convertToInt(inp) != 0x74697865) {
+    while (convertToInt(inp) != 'exit') {
         std::cout << "|";
         if (nod_origin_index < graph.size())
             std::cout << '"' << graph[nod_origin_index].name.c_str() << '"';
@@ -763,14 +797,14 @@ int enterManualMode() {
             std::cout << "[null]";
 
         std::cout << " inp: ";
-        std::getline(std::cin, inp);
+        std::getline(std::cin >> std::ws, inp);
 
         if(inp.find(' ') == inp.npos)
             executeIntCommand(convertToInt(inp));
         else {
             argument_flag = true;
 
-            pushInpToArgQueue();
+            arg_input_queue = pushInpToQueue(inp);
             loopArgumentInputQueue(arg_input_queue.size());
 
             argument_flag = false;
