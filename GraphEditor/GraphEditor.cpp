@@ -316,7 +316,17 @@ void fRemovePoint() {
 
 
 void fDictionPoint() {
-    for (auto& a : name_map) {
+    using pair_name_map = std::pair<std::string, size_t>;
+
+    std::vector<pair_name_map> vec_name_map;
+    vec_name_map.reserve(name_map.size());
+
+    for (auto& elem : name_map) {
+        vec_name_map.push_back(elem);
+    }
+    std::sort(vec_name_map.begin(), vec_name_map.end(), [=](pair_name_map& a, pair_name_map& b) {return a.second < b.second; });
+
+    for (auto& a : vec_name_map) {
         std::cout << '"' << a.first << "\": " << a.second << '\n';
     }
 }
@@ -560,29 +570,33 @@ void fLoadGraph() {
 
 
 void fHelp() {
-    std::cout << "Graph Editor is a program, which was made for assisting making graphs\n";
-    std::cout << "Commands:\n";
-    std::cout << "\tnewp - create a node\n";
-    std::cout << "\tnewe - create an edge (from origin to...)\n";
-    std::cout << "\tseto - set origin node (to...)\n";
-    std::cout << "\tremp - remove a node and removing all references to the node (is...)\n";
-    std::cout << "\treme - remove an edge between origin and a node (from origin to...)\n";
-    std::cout << "\tlist - listing all nodes and costs which are adjacent to the origin node\n";
-    std::cout << "\tdict - shows a dictionary of names and it's translation to their indexes\n";
-    std::cout << "\tsave - saves graph in .grf using custom Python scripts\n";
-    std::cout << "\tload - loads graph from .grf using custom Python scripts\n";
-    std::cout << "\tclir - clears the screen\n";
-    std::cout << "\trset - resets graph to empty graph\n";
-    std::cout << "\texit - exit\n";
-
-    std::cout << '\n';
-    std::cout << "Also exists custom arguments:\n";
-    std::cout << "\t[--version | -v]  - get a version\n";
-    std::cout << "\t[-d]              - enter to debug mode (cache wouldn't be erased)\n";
-    std::cout << "\t[-h | --help]     - shows help for navigating the program\n";
-    std::cout << "\t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))\n";
-    std::cout << '\n';
-
+    std::cout << 
+"\
+Graph Editor is a program, which was made for assisting making graphs\n\
+Commands:\n\
+\tnewp - create a node\n\
+\tnewe - create an edge (from origin to...)\n\
+\tseto - set origin node (to...)\n\
+\tremp - remove a node and removing all references to the node (is...)\n\
+\treme - remove an edge between origin and a node (from origin to...)\n\
+\tlist - listing all nodes and costs which are adjacent to the origin node\n\
+\tdict - shows a dictionary of names and it's translation to their indexes\n\
+\tsave - saves graph in .grf using custom Python scripts\n\
+\tload - loads graph from .grf using custom Python scripts\n\
+\tclir - clears the screen\n\
+\trset - resets graph to empty graph\n\
+\texit - exit\n\
+\n\
+Also exists custom arguments:\n\
+\t[--version | -v]  - get a version\n\
+\t[-d]              - enter to debug mode (cache wouldn't be erased)\n\
+\t[-h | --help]     - shows help for navigating the program\n\
+\t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))\n\
+\n\
+In argument mode:\n\
+\t[-i] - alias to \"load\"\
+\t[-o] - alias to \"save\"\
+\t[-temp [i | o]] - save as temporary file or load it for performance";
 }
 
 
@@ -599,6 +613,25 @@ void fClear() {
 void fReset() {
     graph.clear();
     name_map.clear();
+}
+
+
+void fSort() {
+    using pair_name_map = std::pair<std::string, size_t>;
+
+    std::vector<pair_name_map> vec_name_map;
+    vec_name_map.reserve(name_map.size());
+        
+    for (auto& elem : name_map) {
+        vec_name_map.push_back(elem);
+    }
+    std::sort(vec_name_map.begin(), vec_name_map.end(), [=](pair_name_map& a, pair_name_map& b) {return a.second < b.second; });
+
+    name_map.clear();
+
+    for (auto& elem : vec_name_map) {
+        name_map.insert(elem);
+    }
 }
 
 
@@ -652,6 +685,7 @@ void executeIntCommand(int input) {
         case 0x65766173: fSaveGraph();    break;
         case 0x64616f6c: fLoadGraph();    break;
         case 0x72696c63: fClear();        break;
+        case 0x74726f73: fSort();         break;
         case 0x3f:
         case 0x706c6568: fHelp();         break;
         case 0x74657372: fReset();        break;
@@ -705,27 +739,31 @@ int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
 
 void pushInpToArgQueue() {
     size_t crnt_space = inp.find(' ');
-    size_t prev_space = 0;
 
     while (crnt_space != inp.npos) {
-        if (crnt_space - prev_space != 1) {
+        if (crnt_space != 1) {
+            arg_input_queue.push(inp.substr(0, crnt_space));
+            inp.erase(inp.begin(), inp.begin() + crnt_space + 1);
+        } else inp.erase(inp.begin());
 
-        }
-
-        prev_space = crnt_space;
         crnt_space = inp.find(' ');
+    }
+
+    if (crnt_space != 1) {
+        arg_input_queue.push(inp.substr(0, crnt_space));
     }
 }
 
 int enterManualMode() {
     while (convertToInt(inp) != 0x74697865) {
+        std::cout << "|";
         if (nod_origin_index < graph.size())
             std::cout << '"' << graph[nod_origin_index].name.c_str() << '"';
         else
             std::cout << "[null]";
 
         std::cout << " inp: ";
-        std::cin >> inp;
+        std::getline(std::cin, inp);
 
         if(inp.find(' ') == inp.npos)
             executeIntCommand(convertToInt(inp));
@@ -736,6 +774,7 @@ int enterManualMode() {
             loopArgumentInputQueue(arg_input_queue.size());
 
             argument_flag = false;
+            std::cout << '\n';
         }
     }
 
