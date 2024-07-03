@@ -58,10 +58,6 @@ inline int convertToInt(const std::string& str) {
     return ((orig & 0xff000000) >> 24) | ((orig & 0xff0000) >> 8) | ((orig & 0xff00) << 8) | ((orig & 0xff) << 24);
 }
 
-inline void interupted() {
-    std::cout << "interrupted\n";
-}
-
 
 std::unordered_map<std::string, size_t> name_map;
 std::vector<Node> graph;
@@ -74,6 +70,9 @@ bool argument_flag = false;
 std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
 
+
+void executeIntCommand(int);
+void loopArgumentInputQueue(const size_t arg_queue_size);
 
 void inputNodeName() {
     if (argument_flag) {
@@ -141,7 +140,7 @@ void embedEdge(Edge& edg) {
 
 void giveChoiceUseNameAsIndex() {
     if (argument_flag) {
-        inp = (arg_input_queue.front()[0] == 'n') ? "Y" : "n";
+        inp = isdigit(arg_input_queue.front()[0]) ? "n" : "Y";
     } else {
         std::cout << "use name as index(Y/n): ";
         std::cin >> inp;
@@ -157,7 +156,7 @@ void fNewEdge() {
         Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
-        if ((edg.indx_to = getNode()) == -1) { interupted(); return; }
+        if ((edg.indx_to = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
 
         embedEdge(edg);
     } else if (inp[0] == 'n') {
@@ -223,7 +222,7 @@ void fSetOrigin() {
 
     if (inp[0] == 'Y') {
         if ((nod_origin_index = getNode()) == -1) {
-            interupted();
+            std::cout << "eror: not found by name\n";
             nod_origin_index = 0;
             return;
         }
@@ -296,7 +295,7 @@ void fRemovePoint() {
     size_t targt;
 
     if (inp[0] == 'Y') {
-        if ((targt = getNode()) == -1) { interupted(); return; }
+        if ((targt = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
@@ -363,7 +362,7 @@ void fRemoveEdge() {
     size_t targt = 0;
 
     if (inp[0] == 'Y') {
-        if ((targt = getNode()) == -1) { interupted(); return; }
+        if ((targt = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
 
         removeEdgeFromNodes(targt);
 
@@ -592,6 +591,10 @@ Commands:\n\
 \tload - loads graph from .grf using custom Python scripts\n\
 \ttmpo - saves as cache for performance\n\
 \ttmpi - loads cache from command 'tmpo' or from 'load' with debug flag\n\
+\tnewf - creates a function was for argument list and saves in .func\n\
+\tlstf - list loadedd functions\n\
+\tcall - call a function, which execute all from argument list\n\
+\treff - refresh functions from .func\n\
 \tclir - clears the screen\n\
 \trset - resets graph to empty graph\n\
 \texit - exit\n\
@@ -649,7 +652,7 @@ std::queue<std::string> pushInpToQueue(std::string input) {
     size_t crnt_space = input.find(' ');
 
     while (crnt_space != input.npos) {
-        if (crnt_space != 1) {
+        if (crnt_space) {
             queue.push(input.substr(0, crnt_space));
             input.erase(input.begin(), input.begin() + crnt_space + 1);
         } else input.erase(input.begin());
@@ -664,22 +667,136 @@ std::queue<std::string> pushInpToQueue(std::string input) {
     return queue;
 }
 
+void dumpToDotFunc() {
+    std::ofstream fout;
+    fout.open(".func");
+
+    for (auto elem : functions) {
+        fout << elem.first << '\t';
+        
+        const size_t queue_size = elem.second.input_queue.size();
+        auto& queue = elem.second.input_queue;
+        std::vector<std::string> vec_queue;
+        vec_queue.reserve(queue_size);
+
+        for (size_t i = 0; i < queue_size - 1; i++) {
+            fout << queue.front() << ' ';
+            queue.pop();
+        }
+
+        fout << queue.front() << '\t';
+        fout << (elem.second.require_cache ? "cache" : "instance") << '\n';
+    }
+
+    fout.close();
+}
+
+void refreshFromDotFunc() {
+    std::ifstream fin;
+    fin.open(".func");
+
+    std::string line;
+    std::getline(fin, line);
+
+    std::string name;
+    size_t indexTo = 0;
+
+    Function func;
+
+    while (fin) {
+        indexTo = line.find('\t');
+        name = line.substr(0, indexTo);
+        line.erase(line.begin(), line.begin() + indexTo + 1);
+
+        indexTo = line.find('\t');
+        func.input_queue = pushInpToQueue(line.substr(0, indexTo));
+        line.erase(line.begin(), line.begin() + indexTo + 1);
+
+        func.require_cache = line == "cache";
+
+        functions.insert(std::make_pair(name, func));
+
+        std::getline(fin, line);
+    }
+
+    fin.close();
+}
+
 void fNewFunction() {
     Function func;
     std::string name;
 
-    std::cout << "Choose a name for a function: ";
-    std::getline(std::cin >> std::ws, name);
+    if (argument_flag) {
+        name = arg_input_queue.front();
+        arg_input_queue.pop();
 
-    std::cout << "Insert a logic for the function(as for argument mode): ";
-    std::getline(std::cin >> std::ws, inp);
-    func.input_queue = pushInpToQueue(inp);
+        func.input_queue = pushInpToQueue(arg_input_queue.front());
+        arg_input_queue.pop();
 
-    std::cout << "Does the function accepts and returns cache?(Y/n): ";
-    std::cin >> inp;
-    func.require_cache = (inp[0] == 'Y');
+        func.require_cache = arg_input_queue.front() == "cache";
+    }
+    else {
+        std::cout << "Choose a name for a function: ";
+        std::getline(std::cin >> std::ws, name);
+
+        std::cout << "Insert a logic for the function(as for argument mode): ";
+        std::getline(std::cin >> std::ws, inp);
+        func.input_queue = pushInpToQueue(inp);
+
+        std::cout << "Does the function accepts and returns cache?(Y/n): ";
+        std::cin >> inp;
+        func.require_cache = (inp[0] == 'Y');
+    }
 
     functions.insert(std::make_pair(name, func));
+
+    dumpToDotFunc();
+}
+
+
+void fListFunctions() {
+    std::cout << "Functions:\n";
+    std::for_each(functions.begin(), functions.end(), [](decltype(*functions.begin())& elem) { std::cout << "\t -> \"" << elem.first << "\"\n"; });
+}
+
+
+void fCallFunction() {
+    if (argument_flag) {
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    }
+    else {
+        std::cout << "Function: ";
+        std::getline(std::cin >> std::ws, inp);
+    }
+
+    auto& func = functions.at(inp);
+    auto orig_arg_input_queue = arg_input_queue;
+
+    arg_input_queue = func.input_queue;
+    argument_flag = true;
+
+    if (func.require_cache) {
+        auto orig_graph = graph;
+        auto orig_name_map = name_map;
+        auto orig_nod_origing_index = nod_origin_index;
+        
+        parseCache();
+        loopArgumentInputQueue(arg_input_queue.size());
+        generateTempCache();
+
+        graph = orig_graph;
+        name_map = orig_name_map;
+        nod_origin_index = orig_nod_origing_index;
+    }
+    else {
+        arg_input_queue = func.input_queue;
+        loopArgumentInputQueue(arg_input_queue.size());
+    }
+
+    arg_input_queue = orig_arg_input_queue;
+    argument_flag = false;
+    std::cout << '\n';
 }
 
 
@@ -717,30 +834,35 @@ int init(const int args, const char* argv[], size_t& arg_count) {
         return 1;
     }
 
+    refreshFromDotFunc();
+
     return 0;
 }
 
 void executeIntCommand(int input) {
     try {
         switch (input) {
-        case 'newp': fNewPoint();         break;
-        case 'newe': fNewEdge();          break;
-        case 'seto': fSetOrigin();        break;
-        case 'remp': fRemovePoint();      break;
-        case 'reme': fRemoveEdge();       break;
-        case 'renm': fRenamePoint();      break;
-        case 'list': fList();             break;
-        case 'dict': fDictionPoint();     break;
-        case 'save': fSaveGraph();        break;
-        case 'load': fLoadGraph();        break;
-        case 'clir': fClear();            break;
-        case 'sort': fSort();             break;
-        case 'tmpo': generateTempCache(); break;
-        case 'tmpi': parseCache(); break;
+        case 'newp': fNewPoint();          break;
+        case 'newe': fNewEdge();           break;
+        case 'seto': fSetOrigin();         break;
+        case 'remp': fRemovePoint();       break;
+        case 'reme': fRemoveEdge();        break;
+        case 'renm': fRenamePoint();       break;
+        case 'list': fList();              break;
+        case 'dict': fDictionPoint();      break;
+        case 'save': fSaveGraph();         break;
+        case 'load': fLoadGraph();         break;
+        case 'clir': fClear();             break;
         case '?':
-        case 'help': fHelp();             break;
-        case 'rset': fReset();            break;
-        case 'lsta': fListAll();          break;
+        case 'help': fHelp();              break;
+        case 'rset': fReset();             break;
+        case 'lsta': fListAll();           break;
+        case 'tmpi': parseCache();         break;
+        case 'tmpo': generateTempCache();  break;
+        case 'newf': fNewFunction();       break;
+        case 'lstf': fListFunctions();     break;
+        case 'call': fCallFunction();      break;
+        case 'reff': refreshFromDotFunc(); break;
 
         default: std::cout << "invl\n"; [[fallthrough]];
         case 'exit': break;
