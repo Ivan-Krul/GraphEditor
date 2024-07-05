@@ -6,6 +6,8 @@
 #include <filesystem>
 #include <sstream>
 #include <queue>
+#include <cstring>
+#include <algorithm>
 
 
 #define VERSION "1.1.0"
@@ -756,7 +758,9 @@ void fNewFunction() {
 
 void fListFunctions() {
     std::cout << "Functions:\n";
-    std::for_each(functions.begin(), functions.end(), [](decltype(*functions.begin())& elem) { std::cout << "\t -> \"" << elem.first << "\"\n"; });
+    for(auto& elem : functions) {
+        std::cout << "\t -> \"" << elem.first << "\"\n";
+    }
 }
 
 

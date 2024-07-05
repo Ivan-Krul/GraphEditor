@@ -6,6 +6,8 @@ read -p "is it for 32-bit architecture?(Y/n): " $debug
 
 mkdir $dest
 
+set -e
+
 if [[ $debug == "Y" ]]; then
     g++ -m32 -std=c++17 "GraphEditor/GraphEditor.cpp" -o "$dest/GraphEditor"
 else
