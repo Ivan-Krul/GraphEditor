@@ -44,7 +44,7 @@ In argument mode:
 
 Installing
 ===============
-In realese tab exists 6 binaries for x86_32 and x86_64
+In realese tab exists 8 binaries for x86_32, x86_64 and 2 with aarch64/32
 Also it's divided into 3 categories:
  -  Linux (in general with GCC)
  -  Windows MSVC
@@ -59,7 +59,7 @@ You just double click and that it (in Linux, launch using terminals💀)
 
 Compiling
 ===============
-If you're wanting to compile using MinGW or GCC, then you can just launch `build.sh`.
+If you're wanting to compile using MinGW or GCC, then you can just launch `build.sh` after `chmod a+x build.sh`.
 If you're wanting to compile using MSVC, then here's a .sln project
 
 It requires:
