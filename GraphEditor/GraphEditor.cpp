@@ -36,6 +36,10 @@
 #endif
 
 
+
+constexpr char c_mark_string = '"';
+
+
 struct Node;
 
 struct Edge {
@@ -66,8 +70,10 @@ std::vector<Node> graph;
 size_t nod_origin_index = 0;
 std::string inp = "";
 
-bool debug_flag = false;
-bool argument_flag = false;
+struct {
+    bool arg_mode : 1;
+    bool debug_mode : 1;
+} argument_flag;
 
 std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
@@ -77,7 +83,7 @@ void executeIntCommand(int);
 void loopArgumentInputQueue(const size_t arg_queue_size);
 
 void inputNodeName() {
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         inp = arg_input_queue.front();
         arg_input_queue.pop();
     } else {
@@ -101,7 +107,7 @@ void fNewPoint() {
 size_t getNode() {
     auto iter = name_map.begin();
 
-    if (!argument_flag) {
+    if (!argument_flag.arg_mode) {
         auto not_inter = true;
         do {
             inputNodeName();
@@ -128,7 +134,7 @@ size_t getNode() {
 
 
 void embedEdge(Edge& edg) {
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         edg.cost = std::stof(arg_input_queue.front());
         arg_input_queue.pop();
     } else {
@@ -141,7 +147,7 @@ void embedEdge(Edge& edg) {
 }
 
 void giveChoiceUseNameAsIndex() {
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         inp = isdigit(arg_input_queue.front()[0]) ? "n" : "Y";
     } else {
         std::cout << "use name as index(Y/n): ";
@@ -165,7 +171,7 @@ void fNewEdge() {
         Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
-        if (argument_flag) {
+        if (argument_flag.arg_mode) {
             edg.indx_to = std::stoi(arg_input_queue.front());
             arg_input_queue.pop();
 
@@ -229,7 +235,7 @@ void fSetOrigin() {
             return;
         }
     } else if (inp[0] == 'n') {
-        if (argument_flag) {
+        if (argument_flag.arg_mode) {
             nod_origin_index = std::stoi(arg_input_queue.front());
             arg_input_queue.pop();
 
@@ -304,7 +310,7 @@ void fRemovePoint() {
         removeAllReference(targt);
 
     } else if (inp[0] == 'n') {
-        if (argument_flag) {
+        if (argument_flag.arg_mode) {
             targt = std::stoi(arg_input_queue.front());
             arg_input_queue.pop();
 
@@ -369,7 +375,7 @@ void fRemoveEdge() {
         removeEdgeFromNodes(targt);
 
     } else if (inp[0] == 'n') {
-        if (argument_flag) {
+        if (argument_flag.arg_mode) {
             nod_origin_index = std::stoi(arg_input_queue.front());
             arg_input_queue.pop();
 
@@ -401,7 +407,7 @@ enum class PythonPathMethods {
 };
 
 void getPythonPaths(PythonPathMethods method) {
-    if (argument_flag) return;
+    if (argument_flag.arg_mode) return;
 
     std::cout << "list of saved files:\n";
 
@@ -474,7 +480,7 @@ void executePythonScript(const std::string& pythonname, const std::string& filen
 }
 
 void inputFileProperty(std::string& file) {
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         file = arg_input_queue.front();
         arg_input_queue.pop();
 
@@ -615,7 +621,7 @@ In argument mode:\n\
 
 
 void fClear() {
-    if (argument_flag) return;
+    if (argument_flag.arg_mode) return;
 #ifdef Windows
     system("cls");
 #else
@@ -653,17 +659,37 @@ std::queue<std::string> pushInpToQueue(std::string input) {
     std::queue<std::string> queue;
     size_t crnt_space = input.find(' ');
 
+    std::string buf;
+
     while (crnt_space != input.npos) {
         if (crnt_space) {
-            queue.push(input.substr(0, crnt_space));
-            input.erase(input.begin(), input.begin() + crnt_space + 1);
+            buf = input.substr(0, crnt_space);
+            if (buf[0] == c_mark_string) {
+                input.erase(input.begin());
+                crnt_space = input.find('"');
+                buf = input.substr(0, crnt_space);
+                queue.push(buf);
+                input.erase(input.begin(), input.begin() + crnt_space + 1);
+            } else {
+                queue.push(buf);
+                input.erase(input.begin(), input.begin() + crnt_space + 1);
+            }
         } else input.erase(input.begin());
 
         crnt_space = input.find(' ');
     }
 
-    if (crnt_space != 1) {
-        queue.push(input.substr(0, crnt_space));
+    if (crnt_space) {
+        buf = input.substr(0, crnt_space);
+
+        if (buf[0] == c_mark_string) {
+            input.erase(input.begin());
+            crnt_space = input.find('"');
+            buf = input.substr(0, crnt_space);
+            queue.push(buf);
+        } else {
+            queue.push(buf);
+        }
     }
 
     return queue;
@@ -728,7 +754,7 @@ void fNewFunction() {
     Function func;
     std::string name;
 
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         name = arg_input_queue.front();
         arg_input_queue.pop();
 
@@ -765,7 +791,7 @@ void fListFunctions() {
 
 
 void fCallFunction() {
-    if (argument_flag) {
+    if (argument_flag.arg_mode) {
         inp = arg_input_queue.front();
         arg_input_queue.pop();
     }
@@ -778,7 +804,7 @@ void fCallFunction() {
     auto orig_arg_input_queue = arg_input_queue;
 
     arg_input_queue = func.input_queue;
-    argument_flag = true;
+    argument_flag.arg_mode = true;
 
     if (func.require_cache) {
         auto orig_graph = graph;
@@ -799,7 +825,7 @@ void fCallFunction() {
     }
 
     arg_input_queue = orig_arg_input_queue;
-    argument_flag = false;
+    argument_flag.arg_mode = false;
     std::cout << '\n';
 }
 
@@ -814,20 +840,82 @@ bool isPythonMissing() {
     );
 }
 
+
+std::string deleteSpaces(const std::string& content) {
+    bool inString = false;
+    bool wasSpace = false;
+
+    std::string result;
+    result.reserve(content.size());
+
+    for (size_t i = 0; i < content.size(); i++) {
+        if (isspace(content[i])) {
+            if (!wasSpace) {
+                if (inString)
+                    result.push_back(content[i]);
+                else
+                    result.push_back(' ');
+            }
+
+            wasSpace = true;
+        } else if (content[i] == c_mark_string) {
+            inString = !inString;
+            wasSpace = false;
+        } else {
+            result.push_back(content[i]);
+            wasSpace = false;
+        }
+    }
+
+    return result;
+}
+
+void extractFromFileToQueue(size_t& arg_queue_size) {
+    std::string content;
+    {
+        std::ifstream fin;
+        fin.open(arg_input_queue.front());
+        arg_input_queue.pop();
+
+        std::getline(fin, content, '\0');
+
+        fin.close();
+    }
+
+    content = deleteSpaces(content);
+
+    auto cpy_arg = pushInpToQueue(content);
+
+    while (!arg_input_queue.empty()) {
+        cpy_arg.push(arg_input_queue.front());
+        arg_input_queue.pop();
+    }
+
+    argument_flag.arg_mode = true;
+    arg_input_queue = cpy_arg;
+    arg_queue_size = arg_input_queue.size();
+}
+
+
 int init(const int args, const char* argv[], size_t& arg_count) {
     if (args > 1) {
         const char* arg = argv[arg_count];
-        if ((strcmp(arg, "--version") | strcmp(arg, "-v")) == 0) {
+        if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
             std::cout << "Graph Editor v" << VERSION << "." << ENV << "." << ARC << '\n';
             return 2;
         } else if (strcmp(arg, "-d") == 0) {
-            debug_flag = true;
+            argument_flag.debug_mode = true;
+            std::cout << "Debug\n";
             arg = argv[++arg_count];
-        } else if ((strcmp(arg, "-h") | strcmp(arg, "--help")) == 0) {
+        } else if (strcmp(arg, "-h") == 0 || strcmp(arg, "--help") == 0) {
             fHelp();
             return 2;
-        } else if ((strcmp(arg, "-a") | strcmp(arg, "--argument")) == 0) {
-            argument_flag = true;
+        } else if (strcmp(arg, "-a") == 0 || strcmp(arg, "--argument") == 0) {
+            argument_flag.arg_mode = true;
+            arg = argv[++arg_count];
+        } else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--file") == 0) {
+            extractFromFileToQueue(arg_count);
+            argument_flag.arg_mode = true;
             arg = argv[++arg_count];
         }
     }
@@ -876,9 +964,10 @@ void executeIntCommand(int input) {
     }
 }
 
-void loopArgumentInputQueue(const size_t arg_queue_size) {
+void loopArgumentInputQueue(size_t arg_queue_size) {
+    auto was = arg_input_queue.size();
     while (arg_input_queue.size()) {
-        std::cout << arg_queue_size - arg_input_queue.size() << ' ';
+        std::cout << was - arg_input_queue.size() << ' ';
         if (arg_input_queue.front() == "-i") {
             arg_input_queue.pop();
             fLoadGraph();
@@ -893,6 +982,9 @@ void loopArgumentInputQueue(const size_t arg_queue_size) {
                 parseCache();
 
             arg_input_queue.pop();
+        } else if (arg_input_queue.front() == "-f" || arg_input_queue.front() == "--file") {
+            arg_input_queue.pop();
+            extractFromFileToQueue(was);
         } else {
             int num = convertToInt(arg_input_queue.front());
             arg_input_queue.pop();
@@ -903,7 +995,7 @@ void loopArgumentInputQueue(const size_t arg_queue_size) {
 
 int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
     for (size_t i = arg_count; i < args; i++) {
-        if (debug_flag) {
+        if (argument_flag.debug_mode) {
             std::cout << '"' << argv[i] << "\"\n";
         }
         arg_input_queue.push(argv[i]);
@@ -928,12 +1020,12 @@ int enterManualMode() {
         if(inp.find(' ') == inp.npos)
             executeIntCommand(convertToInt(inp));
         else {
-            argument_flag = true;
+            argument_flag.arg_mode = true;
 
             arg_input_queue = pushInpToQueue(inp);
             loopArgumentInputQueue(arg_input_queue.size());
 
-            argument_flag = false;
+            argument_flag.arg_mode = false;
             std::cout << '\n';
         }
     }
@@ -945,9 +1037,9 @@ int main(const int args, const char* argv[]) {
     size_t arg_count = 1;
 
     int argRet = init(args, argv, arg_count);
-    if (argRet > 0 && !argument_flag) return 2 - argRet;
+    if (argRet > 0 && !argument_flag.arg_mode) return 2 - argRet;
 
-    return argument_flag
+    return argument_flag.arg_mode
         ? enterArgumentMode(args, argv, arg_count)
         : enterManualMode();
 }
