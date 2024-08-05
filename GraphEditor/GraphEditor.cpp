@@ -10,7 +10,7 @@
 #include <algorithm>
 
 
-#define VERSION "1.2.0"
+#define VERSION "1.2.1"
 
 #if defined(_WIN32) || defined(_WIN64) || \
     defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -176,12 +176,12 @@ void fNewEdge() {
             arg_input_queue.pop();
 
             if (edg.indx_to >= graph.size() && edg.indx_to == nod_origin_index) {
-                std::cout << "index is out of range\n";
+                std::cout << "not found by index\n";
                 exit(1);
             }
         }
         else
-            while ((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index);
+            if((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index) { std::cout << "eror: not found by index\n"; return; }
 
         embedEdge(edg);
     }
@@ -244,7 +244,7 @@ void fSetOrigin() {
                 exit(1);
             }
         } else
-            while ((std::cin >> nod_origin_index, nod_origin_index) >= graph.size());
+            if ((std::cin >> nod_origin_index, nod_origin_index) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
     }
 }
 
@@ -319,7 +319,7 @@ void fRemovePoint() {
                 exit(1);
             }
         } else
-            while ((std::cin >> targt, targt) >= graph.size());
+            if ((std::cin >> targt, targt) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
@@ -340,7 +340,7 @@ void fDictionPoint() {
     std::sort(vec_name_map.begin(), vec_name_map.end(), [=](pair_name_map& a, pair_name_map& b) {return a.second < b.second; });
 
     for (auto& a : vec_name_map) {
-        std::cout << '"' << a.first << "\": " << a.second << '\n';
+        std::cout << a.second << ": \"" << a.first << "\"" << '\n';
     }
 }
 
@@ -384,7 +384,7 @@ void fRemoveEdge() {
                 exit(1);
             }
         } else
-            while ((std::cin >> targt, targt) >= graph.size());
+            if ((std::cin >> targt, targt) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
 
         removeEdgeFromNodes(targt);
     }
@@ -611,7 +611,8 @@ Also exists custom arguments:\n\
 \t[--version | -v]  - get a version\n\
 \t[-d]              - enter to debug mode (cache wouldn't be erased)\n\
 \t[-h | --help]     - shows help for navigating the program\n\
-\t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))\n\
+\t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes it recognise automatically))\n\
+\t[-ssa]            - you can type your input using a single string argument (f.e. \"\")\n\
 \n\
 In argument mode:\n\
 \t[-i] - alias to \"load\"\n\
@@ -655,40 +656,74 @@ void fSort() {
 }
 
 
+void deleteSpaces(std::string& content) {
+    bool inString = false;
+    bool wasSpace = false;
+
+    std::string result;
+    result.reserve(content.size());
+
+    for (size_t i = 0; i < content.size(); i++) {
+        if (isspace(content[i])) {
+            if (inString)
+                result.push_back(content[i]);
+            else if (!wasSpace)
+                result.push_back(' ');
+
+            wasSpace = true;
+        } else if (content[i] == c_mark_string) {
+            inString = !inString;
+            result.push_back(content[i]);
+            wasSpace = false;
+        } else {
+            result.push_back(content[i]);
+            wasSpace = false;
+        }
+    }
+
+    if (isspace(result[result.size() - 1]))
+        result.erase(result.begin() + result.size() - 1);
+
+    result.shrink_to_fit();
+
+    content = result;
+}
+
+
 std::queue<std::string> pushInpToQueue(std::string input) {
     std::queue<std::string> queue;
+    deleteSpaces(input);
+
     size_t crnt_space = input.find(' ');
 
-    std::string buf;
+    size_t counter_beg = 0;
+    size_t counter_end;
 
     while (crnt_space != input.npos) {
         if (crnt_space) {
-            buf = input.substr(0, crnt_space);
-            if (buf[0] == c_mark_string) {
-                input.erase(input.begin());
-                crnt_space = input.find('"');
-                buf = input.substr(0, crnt_space);
-                queue.push(buf);
-                input.erase(input.begin(), input.begin() + crnt_space + 1);
+            counter_end = crnt_space;
+            if (input[counter_beg] == c_mark_string) {
+                counter_beg++;
+                counter_end = input.find_first_of(c_mark_string, counter_beg);
+                queue.push(input.substr(counter_beg, counter_end - counter_beg));
+                counter_beg = counter_end + 1;
             } else {
-                queue.push(buf);
-                input.erase(input.begin(), input.begin() + crnt_space + 1);
+                queue.push(input.substr(counter_beg, counter_end - counter_beg));
+                counter_beg = crnt_space + 1;
             }
-        } else input.erase(input.begin());
+        } else counter_beg++;
 
-        crnt_space = input.find(' ');
+        crnt_space = input.find_first_of(' ', counter_beg);
     }
 
-    if (crnt_space) {
-        buf = input.substr(0, crnt_space);
-
-        if (buf[0] == c_mark_string) {
-            input.erase(input.begin());
-            crnt_space = input.find('"');
-            buf = input.substr(0, crnt_space);
-            queue.push(buf);
+    if (counter_end < (input.size() - 1)) {
+        counter_end = input.size();
+        if (input[counter_beg] == c_mark_string) {
+            counter_beg++;
+            counter_end = input.find('"');
+            queue.push(input.substr(counter_beg, counter_end - counter_beg));
         } else {
-            queue.push(buf);
+            queue.push(input.substr(counter_beg, counter_end - counter_beg));
         }
     }
 
@@ -840,34 +875,14 @@ bool isPythonMissing() {
     );
 }
 
-
-std::string deleteSpaces(const std::string& content) {
-    bool inString = false;
-    bool wasSpace = false;
-
-    std::string result;
-    result.reserve(content.size());
-
-    for (size_t i = 0; i < content.size(); i++) {
-        if (isspace(content[i])) {
-            if (!wasSpace) {
-                if (inString)
-                    result.push_back(content[i]);
-                else
-                    result.push_back(' ');
-            }
-
-            wasSpace = true;
-        } else if (content[i] == c_mark_string) {
-            inString = !inString;
-            wasSpace = false;
-        } else {
-            result.push_back(content[i]);
-            wasSpace = false;
-        }
+template<typename T>
+std::queue<T> insertQueueToFrontQueue(std::queue<T> base, std::queue<T> field) {
+    while (!base.empty()) {
+        field.push(base.front());
+        base.pop();
     }
 
-    return result;
+    return field;
 }
 
 void extractFromFileToQueue(size_t& arg_queue_size) {
@@ -882,18 +897,23 @@ void extractFromFileToQueue(size_t& arg_queue_size) {
         fin.close();
     }
 
-    content = deleteSpaces(content);
-
-    auto cpy_arg = pushInpToQueue(content);
-
-    while (!arg_input_queue.empty()) {
-        cpy_arg.push(arg_input_queue.front());
-        arg_input_queue.pop();
-    }
+    arg_input_queue = insertQueueToFrontQueue(arg_input_queue, pushInpToQueue(content));
 
     argument_flag.arg_mode = true;
-    arg_input_queue = cpy_arg;
     arg_queue_size = arg_input_queue.size();
+}
+
+
+void fFile() {
+    size_t queue_size;
+    if (!argument_flag.arg_mode) {
+        std::cout << "File to fetch commands: ";
+        std::string str;
+        std::getline(std::cin, str);
+        arg_input_queue.push(str);
+    }
+    extractFromFileToQueue(queue_size);
+    loopArgumentInputQueue(queue_size);
 }
 
 
@@ -945,7 +965,7 @@ void executeIntCommand(int input) {
         case 'save': fSaveGraph();         break;
         case 'load': fLoadGraph();         break;
         case 'clir': fClear();             break;
-        case '?':
+        case '\0\0\0?':
         case 'help': fHelp();              break;
         case 'rset': fReset();             break;
         case 'lsta': fListAll();           break;
@@ -955,6 +975,7 @@ void executeIntCommand(int input) {
         case 'lstf': fListFunctions();     break;
         case 'call': fCallFunction();      break;
         case 'reff': refreshFromDotFunc(); break;
+        case 'file': fFile();              break;
 
         default: std::cout << "invl\n"; [[fallthrough]];
         case 'exit': break;
@@ -985,8 +1006,14 @@ void loopArgumentInputQueue(size_t arg_queue_size) {
         } else if (arg_input_queue.front() == "-f" || arg_input_queue.front() == "--file") {
             arg_input_queue.pop();
             extractFromFileToQueue(was);
+        } else if (arg_input_queue.front() == "-ssa") {
+            arg_input_queue.pop();
+            const auto str = arg_input_queue.front();
+            arg_input_queue.pop();
+            arg_input_queue = insertQueueToFrontQueue(arg_input_queue, pushInpToQueue(str));
+            was = arg_input_queue.size();
         } else {
-            int num = convertToInt(arg_input_queue.front());
+            const int num = convertToInt(arg_input_queue.front());
             arg_input_queue.pop();
             executeIntCommand(num);
         }
