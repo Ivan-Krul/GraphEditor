@@ -10,7 +10,7 @@
 #include <algorithm>
 
 
-#define VERSION "1.2.1"
+#define VERSION "1.2.2"
 
 #if defined(_WIN32) || defined(_WIN64) || \
     defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -53,6 +53,12 @@ struct Node {
     std::vector<Edge> edge;
 };
 
+union Variable {
+    int    whol;
+    float  flot;
+    size_t indx = 0;
+};
+
 struct Function {
     std::queue<std::string> input_queue;
     bool require_cache = false;
@@ -75,6 +81,7 @@ struct {
     bool debug_mode : 1;
 } argument_flag;
 
+std::unordered_map<std::string, Variable> variables;
 std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
 
@@ -612,7 +619,7 @@ Also exists custom arguments:\n\
 \t[-d]              - enter to debug mode (cache wouldn't be erased)\n\
 \t[-h | --help]     - shows help for navigating the program\n\
 \t[--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes it recognise automatically))\n\
-\t[-ssa]            - you can type your input using a single string argument (f.e. \"\")\n\
+\t[-ssa]            - you can type your input using a single string argument (f.e. -ssa \"newp A newp B ...\")\n\
 \n\
 In argument mode:\n\
 \t[-i] - alias to \"load\"\n\
@@ -717,10 +724,10 @@ std::queue<std::string> pushInpToQueue(std::string input) {
     }
 
     if (counter_end < (input.size() - 1)) {
-        counter_end = input.size();
+        counter_end = input[input.size() - 1] == input.size();
         if (input[counter_beg] == c_mark_string) {
             counter_beg++;
-            counter_end = input.find('"');
+            counter_end = input.find_first_of(c_mark_string, counter_beg);
             queue.push(input.substr(counter_beg, counter_end - counter_beg));
         } else {
             queue.push(input.substr(counter_beg, counter_end - counter_beg));
@@ -965,7 +972,6 @@ void executeIntCommand(int input) {
         case 'save': fSaveGraph();         break;
         case 'load': fLoadGraph();         break;
         case 'clir': fClear();             break;
-        case '\0\0\0?':
         case 'help': fHelp();              break;
         case 'rset': fReset();             break;
         case 'lsta': fListAll();           break;
@@ -975,6 +981,11 @@ void executeIntCommand(int input) {
         case 'lstf': fListFunctions();     break;
         case 'call': fCallFunction();      break;
         case 'reff': refreshFromDotFunc(); break;
+        case 'newv':                       break;
+        case 'remv':                       break;
+        case 'renv':                       break;
+        case 'setv':                       break;
+        case 'outp':                       break;
         case 'file': fFile();              break;
 
         default: std::cout << "invl\n"; [[fallthrough]];
