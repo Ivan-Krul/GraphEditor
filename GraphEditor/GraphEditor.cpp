@@ -53,10 +53,17 @@ struct Node {
     std::vector<Edge> edge;
 };
 
-union Variable {
-    int    whol;
-    float  flot;
-    size_t indx = 0;
+struct Variable {
+    union {
+        int    whol;
+        float  flot;
+        size_t indx = 0;
+    } value;
+    enum : char {
+        whol,
+        flot,
+        indx
+    } type = indx;
 };
 
 struct Function {
@@ -916,11 +923,143 @@ void fFile() {
     if (!argument_flag.arg_mode) {
         std::cout << "File to fetch commands: ";
         std::string str;
-        std::getline(std::cin, str);
+        std::getline(std::cin >> std::ws, str);
         arg_input_queue.push(str);
     }
     extractFromFileToQueue(queue_size);
     loopArgumentInputQueue(queue_size);
+}
+
+
+void fNewVariable() {
+    if (!argument_flag.arg_mode) {
+        std::cout << "Enter a variable name: ";
+        std::getline(std::cin >> std::ws, inp);
+    }
+    else {
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    }
+
+    variables.insert(std::make_pair(inp, Variable{}));
+}
+
+
+void fRemoveVariable() {
+    if (argument_flag.arg_mode) {
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+
+        auto iter = variables.find(inp);
+        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+
+        variables.erase(iter);
+    }
+    else {
+        std::cout << "Variable name for removal: ";
+        std::getline(std::cin >> std::ws, inp);
+
+        auto iter = variables.find(inp);
+        if (iter == variables.end()) { std::cout << "the variable name wasn't found\n"; return; }
+
+        variables.erase(iter);
+    }
+}
+
+
+void fListVariables() {
+    std::cout << "Variables:\n";
+    for (auto& pair : variables) {
+        std::cout << "\t" << pair.first << "\t = ";
+        switch (pair.second.type) {
+        case Variable::whol:
+            std::cout << "[whol]" << pair.second.whol << "\n"; break;
+        case Variable::flot:
+            std::cout << "[flot]" << pair.second.flot << "\n"; break;
+        case Variable::indx:
+            std::cout << "[indx]" << pair.second.indx << "\n"; break;
+        }
+    }
+}
+
+
+void fRenameVariable() {
+    std::string from;
+    auto iter = variables.begin();
+
+    if (argument_flag.arg_mode) {
+        from = arg_input_queue.front();
+        arg_input_queue.pop();
+
+        iter = variables.find(from);
+        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    }
+    else {
+        std::cout << "Variable name to be renamed: ";
+        std::getline(std::cin >> std::ws, from);
+
+        iter = variables.find(from);
+        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+
+        std::cout << "New variable name: ";
+        std::getline(std::cin >> std::ws, inp);
+    }
+
+    auto var = iter->second;
+    variables.erase(iter);
+    variables.insert({ inp, var });
+}
+
+
+void fSetVariable() {
+    auto iter = variables.begin();
+
+    if (argument_flag.arg_mode) {
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+
+        iter = variables.find(inp);
+        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+
+             if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
+        else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
+        else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
+        else    { std::cout << "eror: the value type wasn't settled\n"; return; }
+        
+        inp = arg_input_queue.front();
+        arg_input_queue.pop();
+    } else {
+        std::cout << "Variable name: ";
+        std::getline(std::cin >> std::ws, inp);
+
+        iter = variables.find(inp);
+        if (iter == variables.end()) { std::cout << "The variable name wasn't found\n"; return; }
+
+        std::cout << "Type [whol(eq. int) / flot(eq. float) / indx]: ";
+        std::cin >> inp;
+
+             if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
+        else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
+        else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
+        else    { std::cout << "eror: the value type wasn't settled\n"; return; }
+
+        std::cout << "Value: ";
+        std::cin >> inp;
+    };
+
+    switch (iter->second.type) {
+    case Variable::whol: iter->second.value.whol = std::stoi(inp);  break;
+    case Variable::flot: iter->second.value.flot = std::stof(inp);  break;
+    case Variable::indx: iter->second.value.indx = std::stoul(inp); break;
+    }
+
+
 }
 
 
@@ -981,10 +1120,11 @@ void executeIntCommand(int input) {
         case 'lstf': fListFunctions();     break;
         case 'call': fCallFunction();      break;
         case 'reff': refreshFromDotFunc(); break;
-        case 'newv':                       break;
-        case 'remv':                       break;
-        case 'renv':                       break;
-        case 'setv':                       break;
+        case 'newv': fNewVariable();       break;
+        case 'remv': fRemoveVariable();    break;
+        case 'lstv': fListVariables();     break;
+        case 'renv': fRenameVariable();    break;
+        case 'setv': fSetVariable();       break;
         case 'outp':                       break;
         case 'file': fFile();              break;
 
