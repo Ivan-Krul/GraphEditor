@@ -15,31 +15,46 @@ Commands:
         seto - set origin node (to...)
         remp - remove a node and removing all references to the node (is...)
         reme - remove an edge between origin and a node (from origin to...)
-        remm - rename the current node
-        list - listing all nodes and costs which are adjacent to the origin node
+        renm - rename the current node
+        list - list all nodes and costs which are adjacent to the origin node
         dict - shows a dictionary of names and it's translation to their indexes
         save - saves graph in .grf using custom Python scripts
         load - loads graph from .grf using custom Python scripts
-        tmpo - saves as cache for performance
-        tmpi - loads cache from command 'tmpo' or from 'load' with debug flag
+        clir - clears the screen
+        help - shows help for navigating the program
+        rset - resets graph to empty graph
+        lsta - list whole graph with all edges of nodes
+        tmpi - saves as cache for performance
+        tmpo - loads cache from command 'tmpo' or from 'load' with debug flag
         newf - creates a function was for argument list and saves in .func
         lstf - list loadedd functions
         call - call a function, which execute all from argument list
         reff - refresh functions from .func
-        clir - clears the screen
-        rset - resets graph to empty graph
+        newv - create a variable
+        remv - remove the variable
+        lstv - list all variables
+        renv - rename a variable
+        setv - set variable's value with it's data type
+        outv - output a single variable ($ before variable name)
+        incv - increment a single variable as index ($ before variable name)
+        decv - decrement a single variable as index ($ before variable name)
+        file - extract commands from file and execute them
         exit - exit
 
 Also exists custom arguments:
         [--version | -v]  - get a version
         [-d]              - enter to debug mode (cache wouldn't be erased)
         [-h | --help]     - shows help for navigating the program
-        [--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes you have to type 'n' and space before actual name))
+        [--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes it recognise automatically))
+        [-ssa]            - you can type your input using a single string argument (f.e. -ssa "newp A newp B ...")
 
 In argument mode:
         [-i] - alias to "load"
         [-o] - alias to "save"
         [-temp [i | o]] - alias to "tmpi" or "tmpo"
+
+Also for variables:
+        [$(existing variable's name)] - insert variable's value right in to fields
 ```
 
 Installing

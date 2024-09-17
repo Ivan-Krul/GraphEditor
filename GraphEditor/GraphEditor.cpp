@@ -605,7 +605,7 @@ void parseCache() {
     fin.close();
 
 #ifndef _DEBUG
-    if (!debug_flag)
+    if (!argument_flag.debug_mode)
         std::remove("graph");
 #endif
 }
@@ -673,13 +673,15 @@ Commands:\n\
 \tlstf - list loadedd functions\n\
 \tcall - call a function, which execute all from argument list\n\
 \treff - refresh functions from .func\n\
-\tnewv - create a variable\
-\tremv - remove the variable\
-\tlstv - list all variables\
-\trenv - rename a variable\
-\tsetv - set variable's value with it's data type\
-\toutv - output a single variable ($ before variable name)\
-\tfile - extract commands from file and execute them\
+\tnewv - create a variable\n\
+\tremv - remove the variable\n\
+\tlstv - list all variables\n\
+\trenv - rename a variable\n\
+\tsetv - set variable's value with it's data type\n\
+\toutv - output a single variable ($ before variable name)\n\
+\tincv - increment a single variable as index ($ before variable name)\n\
+\tdecv - decrement a single variable as index ($ before variable name)\n\
+\tfile - extract commands from file and execute them\n\
 \texit - exit\n\
 \n\
 Also exists custom arguments:\n\
@@ -1136,6 +1138,43 @@ void fOutputVariable() {
 }
 
 
+decltype(variables.begin()) getVariableInstance() {
+    auto iter = variables.begin();
+    if (!argument_flag.arg_mode) {
+        std::cin >> inp;
+        iter = variables.find(inp.substr(1));
+    } else {
+        iter = variables.find(arg_input_queue.front().substr(1));
+        arg_input_queue.pop();
+    }
+
+    return iter;
+}
+
+
+void fIncrementVariable() {
+    auto iter = getVariableInstance();
+
+    if (iter == variables.end()) {
+        std::cout << OutErr << "variable wasn't found\n";
+        return;
+    }
+
+    iter->second.value.indx++;
+}
+
+void fDecrementVariable() {
+    auto iter = getVariableInstance();
+
+    if (iter == variables.end()) {
+        std::cout << OutErr << "variable wasn't found\n";
+        return;
+    }
+
+    iter->second.value.indx--;
+}
+
+
 bool preProcressVariablesInp() {
     auto iter = variables.find(inp.substr(1));
     if (iter == variables.end()) {
@@ -1223,6 +1262,8 @@ void executeIntCommand(int input) {
         case 'lstv': fListVariables();     break;
         case 'renv': fRenameVariable();    break;
         case 'setv': fSetVariable();       break;
+        case 'incv': fIncrementVariable(); break;
+        case 'decv': fDecrementVariable(); break;
         case 'outv': fOutputVariable();    break;
         case 'file': fFile();              break;
 
