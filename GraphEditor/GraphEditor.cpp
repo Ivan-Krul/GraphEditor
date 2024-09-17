@@ -10,7 +10,7 @@
 #include <algorithm>
 
 
-#define VERSION "1.2.2"
+#define VERSION "1.3.0"
 
 #if defined(_WIN32) || defined(_WIN64) || \
     defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -38,6 +38,7 @@
 
 
 constexpr char c_mark_string = '"';
+constexpr char c_mark_variable = '$';
 
 
 struct Node;
@@ -91,10 +92,32 @@ struct {
 std::unordered_map<std::string, Variable> variables;
 std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
+Variable active_variable;
 
 
 void executeIntCommand(int);
 void loopArgumentInputQueue(const size_t arg_queue_size);
+bool preProcressVariablesArg();
+bool preProcressVariablesInp();
+
+template<typename T>
+std::enable_if_t<std::is_arithmetic_v<T>, bool> fillWithVariable(T& number) {
+    if (!(argument_flag.arg_mode ? preProcressVariablesArg() : preProcressVariablesInp())) return true;
+
+    switch (active_variable.type) {
+    case Variable::whol: number = active_variable.value.whol; break;
+    case Variable::indx: number = active_variable.value.indx; break;
+    case Variable::flot: number = active_variable.value.flot; break;
+    }
+
+    return false;
+}
+
+
+inline bool checkForInsetingVariable() {
+    return (argument_flag.arg_mode ? arg_input_queue.front() : inp)[0] == c_mark_variable;
+}
+
 
 void inputNodeName() {
     if (argument_flag.arg_mode) {
@@ -118,7 +141,7 @@ void fNewPoint() {
 }
 
 
-size_t getNode() {
+size_t getNodeIndex() {
     auto iter = name_map.begin();
 
     if (!argument_flag.arg_mode) {
@@ -146,15 +169,53 @@ size_t getNode() {
     }
 }
 
+inline bool checkForValidVariables() {
+    if (!argument_flag.arg_mode) std::cin >> inp;
+    return checkForInsetingVariable();
+}
+inline bool checkForValidVariables(const std::string& ask) {
+    if (!argument_flag.arg_mode) {
+        std::cout << ask << ": ";
+        std::cin >> inp;
+    }
+    return checkForInsetingVariable();
+}
+
+inline std::string& getInputStringToConvert() {
+    return argument_flag.arg_mode ? (inp = arg_input_queue.front(), arg_input_queue.pop(), inp) : inp;
+}
+
+template<typename T>
+std::enable_if_t<std::is_floating_point_v<T>> inputNumberFromVariable(T& number) {
+    if (checkForValidVariables()) { if (fillWithVariable(number)) return; } else number = std::stof(getInputStringToConvert());
+}
+template<typename T>
+std::enable_if_t<std::is_floating_point_v<T>> inputNumberFromVariable(T& number, const std::string& ask) {
+    if (checkForValidVariables(ask)) { if (fillWithVariable(number)) return; } else number = std::stof(getInputStringToConvert());
+}
+
+template<typename T>
+std::enable_if_t<std::is_signed_v<T> && !std::is_floating_point_v<T>> inputNumberFromVariable(T& number) {
+    if (checkForValidVariables()) { if (fillWithVariable(number)) return; } else number = std::stoi(getInputStringToConvert());
+}
+template<typename T>
+std::enable_if_t<std::is_signed_v<T> && !std::is_floating_point_v<T>> inputNumberFromVariable(T& number, const std::string& ask) {
+    if (checkForValidVariables(ask)) { if (fillWithVariable(number)) return; } else number = std::stoi(getInputStringToConvert());
+}
+
+template<typename T>
+std::enable_if_t<std::is_unsigned_v<T> && !std::is_floating_point_v<T>> inputNumberFromVariable(T& number) {
+    if (checkForValidVariables()) { if (fillWithVariable(number)) return; } else number = std::stoull(getInputStringToConvert());
+}
+template<typename T>
+std::enable_if_t<std::is_unsigned_v<T> && !std::is_floating_point_v<T>> inputNumberFromVariable(T& number, const std::string& ask) {
+    if (checkForValidVariables(ask)) { if (fillWithVariable(number)) return; } else number = std::stoull(getInputStringToConvert());
+}
+
+inline std::ostream& OutErr(std::ostream& out) { if(argument_flag.arg_mode) out << "eror: "; return out; }
 
 void embedEdge(Edge& edg) {
-    if (argument_flag.arg_mode) {
-        edg.cost = std::stof(arg_input_queue.front());
-        arg_input_queue.pop();
-    } else {
-        std::cout << "cost: ";
-        std::cin >> edg.cost;
-    }
+    inputNumberFromVariable(edg.cost, "cost");
 
     graph[edg.indx_from].edge.push_back(edg);
     graph[edg.indx_to].edge.push_back(edg);
@@ -162,7 +223,7 @@ void embedEdge(Edge& edg) {
 
 void giveChoiceUseNameAsIndex() {
     if (argument_flag.arg_mode) {
-        inp = isdigit(arg_input_queue.front()[0]) ? "n" : "Y";
+        inp = isdigit(arg_input_queue.front()[0]) || arg_input_queue.front()[0] == c_mark_variable ? "n" : "Y";
     } else {
         std::cout << "use name as index(Y/n): ";
         std::cin >> inp;
@@ -178,24 +239,23 @@ void fNewEdge() {
         Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
-        if ((edg.indx_to = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
+        if ((edg.indx_to = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
 
         embedEdge(edg);
     } else if (inp[0] == 'n') {
         Edge edg = { 0 };
         edg.indx_from = nod_origin_index;
 
-        if (argument_flag.arg_mode) {
-            edg.indx_to = std::stoi(arg_input_queue.front());
-            arg_input_queue.pop();
+        inputNumberFromVariable(edg.indx_to);
 
-            if (edg.indx_to >= graph.size() && edg.indx_to == nod_origin_index) {
-                std::cout << "not found by index\n";
-                exit(1);
-            }
+        if (edg.indx_to >= graph.size()) {
+            std::cout << OutErr << "index is out of range\n";
+            return;
         }
-        else
-            if((std::cin >> edg.indx_to, edg.indx_to) >= graph.size() && edg.indx_to == nod_origin_index) { std::cout << "eror: not found by index\n"; return; }
+        if (edg.indx_to == nod_origin_index) {
+            std::cout << OutErr << "index is the same with origin\n";
+            return;
+        }
 
         embedEdge(edg);
     }
@@ -243,22 +303,19 @@ void fSetOrigin() {
     giveChoiceUseNameAsIndex();
 
     if (inp[0] == 'Y') {
-        if ((nod_origin_index = getNode()) == -1) {
-            std::cout << "eror: not found by name\n";
+        if ((nod_origin_index = getNodeIndex()) == -1) {
+            std::cout << OutErr << "not found by name\n";
             nod_origin_index = 0;
             return;
         }
     } else if (inp[0] == 'n') {
-        if (argument_flag.arg_mode) {
-            nod_origin_index = std::stoi(arg_input_queue.front());
-            arg_input_queue.pop();
+        inputNumberFromVariable(nod_origin_index);
 
-            if (nod_origin_index >= graph.size()) {
-                std::cout << "index is out of range\n";
-                exit(1);
-            }
-        } else
-            if ((std::cin >> nod_origin_index, nod_origin_index) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
+        if (nod_origin_index >= graph.size()) {
+            std::cout << OutErr << "index is out of range\n";
+            nod_origin_index = 0;
+            return;
+        }        
     }
 }
 
@@ -317,23 +374,19 @@ void fRemovePoint() {
     size_t targt;
 
     if (inp[0] == 'Y') {
-        if ((targt = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
+        if ((targt = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
         removeAllReference(targt);
 
     } else if (inp[0] == 'n') {
-        if (argument_flag.arg_mode) {
-            targt = std::stoi(arg_input_queue.front());
-            arg_input_queue.pop();
+        inputNumberFromVariable(targt);
 
-            if (targt >= graph.size()) {
-                std::cout << "index is out of range\n";
-                exit(1);
-            }
-        } else
-            if ((std::cin >> targt, targt) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
+        if (targt >= graph.size()) {
+            std::cout << OutErr << "index is out of range\n";
+            return;
+        }
 
         if (nod_origin_index >= targt) nod_origin_index--;
 
@@ -384,21 +437,17 @@ void fRemoveEdge() {
     size_t targt = 0;
 
     if (inp[0] == 'Y') {
-        if ((targt = getNode()) == -1) { std::cout << "eror: not found by name\n"; return; }
+        if ((targt = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
 
         removeEdgeFromNodes(targt);
 
     } else if (inp[0] == 'n') {
-        if (argument_flag.arg_mode) {
-            nod_origin_index = std::stoi(arg_input_queue.front());
-            arg_input_queue.pop();
+        inputNumberFromVariable(targt);
 
-            if (nod_origin_index >= graph.size()) {
-                std::cout << "index is out of range\n";
-                exit(1);
-            }
-        } else
-            if ((std::cin >> targt, targt) >= graph.size()) { std::cout << "eror: not found by index\n"; return; }
+        if (nod_origin_index >= graph.size()) {
+            std::cout << OutErr << "index is out of range\n";
+            exit(1);
+        }
 
         removeEdgeFromNodes(targt);
     }
@@ -949,21 +998,16 @@ void fRemoveVariable() {
     if (argument_flag.arg_mode) {
         inp = arg_input_queue.front();
         arg_input_queue.pop();
-
-        auto iter = variables.find(inp);
-        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
-
-        variables.erase(iter);
     }
     else {
         std::cout << "Variable name for removal: ";
         std::getline(std::cin >> std::ws, inp);
-
-        auto iter = variables.find(inp);
-        if (iter == variables.end()) { std::cout << "the variable name wasn't found\n"; return; }
-
-        variables.erase(iter);
     }
+
+    auto iter = variables.find(inp);
+    if (iter == variables.end()) { std::cout << OutErr << "the variable name wasn't found\n"; return; }
+
+    variables.erase(iter);
 }
 
 
@@ -973,11 +1017,11 @@ void fListVariables() {
         std::cout << "\t" << pair.first << "\t = ";
         switch (pair.second.type) {
         case Variable::whol:
-            std::cout << "[whol]" << pair.second.whol << "\n"; break;
+            std::cout << "[whol]" << pair.second.value.whol << "\n"; break;
         case Variable::flot:
-            std::cout << "[flot]" << pair.second.flot << "\n"; break;
+            std::cout << "[flot]" << pair.second.value.flot << "\n"; break;
         case Variable::indx:
-            std::cout << "[indx]" << pair.second.indx << "\n"; break;
+            std::cout << "[indx]" << pair.second.value.indx << "\n"; break;
         }
     }
 }
@@ -992,7 +1036,7 @@ void fRenameVariable() {
         arg_input_queue.pop();
 
         iter = variables.find(from);
-        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+        if (iter == variables.end()) { std::cout << OutErr << "the variable name wasn't found\n"; return; }
 
         inp = arg_input_queue.front();
         arg_input_queue.pop();
@@ -1002,7 +1046,7 @@ void fRenameVariable() {
         std::getline(std::cin >> std::ws, from);
 
         iter = variables.find(from);
-        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+        if (iter == variables.end()) { std::cout << OutErr << "the variable name wasn't found\n"; return; }
 
         std::cout << "New variable name: ";
         std::getline(std::cin >> std::ws, inp);
@@ -1022,7 +1066,7 @@ void fSetVariable() {
         arg_input_queue.pop();
 
         iter = variables.find(inp);
-        if (iter == variables.end()) { std::cout << "eror: the variable name wasn't found\n"; return; }
+        if (iter == variables.end()) { std::cout << OutErr << "the variable name wasn't found\n"; return; }
 
         inp = arg_input_queue.front();
         arg_input_queue.pop();
@@ -1030,7 +1074,7 @@ void fSetVariable() {
              if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
         else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
         else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
-        else    { std::cout << "eror: the value type wasn't settled\n"; return; }
+        else    { std::cout << OutErr << "the value type wasn't settled\n"; return; }
         
         inp = arg_input_queue.front();
         arg_input_queue.pop();
@@ -1039,7 +1083,7 @@ void fSetVariable() {
         std::getline(std::cin >> std::ws, inp);
 
         iter = variables.find(inp);
-        if (iter == variables.end()) { std::cout << "The variable name wasn't found\n"; return; }
+        if (iter == variables.end()) { std::cout << OutErr << "The variable name wasn't found\n"; return; }
 
         std::cout << "Type [whol(eq. int) / flot(eq. float) / indx]: ";
         std::cin >> inp;
@@ -1047,19 +1091,42 @@ void fSetVariable() {
              if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
         else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
         else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
-        else    { std::cout << "eror: the value type wasn't settled\n"; return; }
+        else    { std::cout << OutErr << "the value type wasn't settled\n"; return; }
 
         std::cout << "Value: ";
         std::cin >> inp;
-    };
+    }
 
     switch (iter->second.type) {
     case Variable::whol: iter->second.value.whol = std::stoi(inp);  break;
     case Variable::flot: iter->second.value.flot = std::stof(inp);  break;
-    case Variable::indx: iter->second.value.indx = std::stoul(inp); break;
+    case Variable::indx: iter->second.value.indx = std::stoull(inp); break;
+    }
+}
+
+
+bool preProcressVariablesInp() {
+    auto iter = variables.find(inp.substr(1));
+    if (iter == variables.end()) {
+        std::cout << OutErr << "variable wasn't found\n";
+        return false;
     }
 
+    active_variable = iter->second;
 
+    return true;
+}
+bool preProcressVariablesArg() {
+    auto iter = variables.find(arg_input_queue.front().substr(1));
+    arg_input_queue.pop();
+    if (iter == variables.end()) {
+        std::cout << OutErr << "variable wasn't found\n";
+        return false;
+    }
+
+    active_variable = iter->second;
+
+    return true;
 }
 
 
@@ -1088,7 +1155,7 @@ int init(const int args, const char* argv[], size_t& arg_count) {
 
 
     if (isPythonMissing()) {
-        std::cout << "python is missing in the enviroument\n";
+        std::cout << OutErr << "python is missing in the enviroument\n";
         return 1;
     }
 
