@@ -105,8 +105,11 @@ std::enable_if_t<std::is_arithmetic_v<T>, bool> fillWithVariable(T& number) {
     if (!(argument_flag.arg_mode ? preProcressVariablesArg() : preProcressVariablesInp())) return true;
 
     switch (active_variable.type) {
+#pragma warning(suppress: 4244)
     case Variable::whol: number = active_variable.value.whol; break;
+#pragma warning(suppress: 4244)
     case Variable::indx: number = active_variable.value.indx; break;
+#pragma warning(suppress: 4244)
     case Variable::flot: number = active_variable.value.flot; break;
     }
 
@@ -655,19 +658,28 @@ Commands:\n\
 \tseto - set origin node (to...)\n\
 \tremp - remove a node and removing all references to the node (is...)\n\
 \treme - remove an edge between origin and a node (from origin to...)\n\
-\tremm - rename the current node\n\
-\tlist - listing all nodes and costs which are adjacent to the origin node\n\
+\trenm - rename the current node\n\
+\tlist - list all nodes and costs which are adjacent to the origin node\n\
 \tdict - shows a dictionary of names and it's translation to their indexes\n\
 \tsave - saves graph in .grf using custom Python scripts\n\
 \tload - loads graph from .grf using custom Python scripts\n\
-\ttmpo - saves as cache for performance\n\
-\ttmpi - loads cache from command 'tmpo' or from 'load' with debug flag\n\
+\tclir - clears the screen\n\
+\thelp - shows help for navigating the program\n\
+\trset - resets graph to empty graph\n\
+\tlsta - list whole graph with all edges of nodes\n\
+\ttmpi - saves as cache for performance\n\
+\ttmpo - loads cache from command 'tmpo' or from 'load' with debug flag\n\
 \tnewf - creates a function was for argument list and saves in .func\n\
 \tlstf - list loadedd functions\n\
 \tcall - call a function, which execute all from argument list\n\
 \treff - refresh functions from .func\n\
-\tclir - clears the screen\n\
-\trset - resets graph to empty graph\n\
+\tnewv - create a variable\
+\tremv - remove the variable\
+\tlstv - list all variables\
+\trenv - rename a variable\
+\tsetv - set variable's value with it's data type\
+\toutv - output a single variable ($ before variable name)\
+\tfile - extract commands from file and execute them\
 \texit - exit\n\
 \n\
 Also exists custom arguments:\n\
@@ -680,7 +692,10 @@ Also exists custom arguments:\n\
 In argument mode:\n\
 \t[-i] - alias to \"load\"\n\
 \t[-o] - alias to \"save\"\n\
-\t[-temp [i | o]] - alias to \"tmpi\" or \"tmpo\"\n";
+\t[-temp [i | o]] - alias to \"tmpi\" or \"tmpo\"\n\
+\n\
+Also for variables:\n\
+\t[$(existing variable's name)] - insert variable's value right in to fields \n";
 }
 
 
@@ -1105,6 +1120,22 @@ void fSetVariable() {
 }
 
 
+void fOutputVariable() {
+    if (!argument_flag.arg_mode) std::cin >> inp;
+    if (!(argument_flag.arg_mode ? preProcressVariablesArg() : preProcressVariablesInp())) return;
+
+    std::cout << "[-]" << "\t = ";
+    switch (active_variable.type) {
+    case Variable::whol:
+        std::cout << "[whol]" << active_variable.value.whol << "\n"; break;
+    case Variable::flot:
+        std::cout << "[flot]" << active_variable.value.flot << "\n"; break;
+    case Variable::indx:
+        std::cout << "[indx]" << active_variable.value.indx << "\n"; break;
+    }
+}
+
+
 bool preProcressVariablesInp() {
     auto iter = variables.find(inp.substr(1));
     if (iter == variables.end()) {
@@ -1192,7 +1223,7 @@ void executeIntCommand(int input) {
         case 'lstv': fListVariables();     break;
         case 'renv': fRenameVariable();    break;
         case 'setv': fSetVariable();       break;
-        case 'outp':                       break;
+        case 'outv': fOutputVariable();    break;
         case 'file': fFile();              break;
 
         default: std::cout << "invl\n"; [[fallthrough]];
