@@ -39,6 +39,8 @@
 
 constexpr char c_mark_string = '"';
 constexpr char c_mark_variable = '$';
+constexpr char c_mark_root_graph_name = '_';
+constexpr char c_mark_root_separator = ':';
 
 
 struct Node;
@@ -78,7 +80,6 @@ inline int convertToInt(const std::string& str) {
     return ((orig & 0xff000000) >> 24) | ((orig & 0xff0000) >> 8) | ((orig & 0xff00) << 8) | ((orig & 0xff) << 24);
 }
 
-
 std::unordered_map<std::string, size_t> name_map;
 std::vector<Node> graph;
 size_t nod_origin_index = 0;
@@ -93,7 +94,6 @@ std::unordered_map<std::string, Variable> variables;
 std::unordered_map<std::string, Function> functions;
 std::queue<std::string> arg_input_queue;
 Variable active_variable;
-
 
 void executeIntCommand(int);
 void loopArgumentInputQueue(const size_t arg_queue_size);
@@ -213,6 +213,18 @@ std::enable_if_t<std::is_unsigned_v<T> && !std::is_floating_point_v<T>> inputNum
 template<typename T>
 std::enable_if_t<std::is_unsigned_v<T> && !std::is_floating_point_v<T>> inputNumberFromVariable(T& number, const std::string& ask) {
     if (checkForValidVariables(ask)) { if (fillWithVariable(number)) return; } else number = std::stoull(getInputStringToConvert());
+}
+
+template<typename T>
+std::enable_if_t<std::is_arithmetic_v<T>> setVariable(Variable& var, T number) {
+    switch (var.type) {
+#pragma warning(suppress: 4244)
+    case Variable::whol: active_variable.value.whol = number; break;
+#pragma warning(suppress: 4244)
+    case Variable::indx: active_variable.value.indx = number; break;
+#pragma warning(suppress: 4244)
+    case Variable::flot: active_variable.value.flot = number; break;
+    }
 }
 
 inline std::ostream& OutErr(std::ostream& out) { if(argument_flag.arg_mode) out << "eror: "; return out; }
@@ -777,7 +789,7 @@ std::queue<std::string> pushInpToQueue(std::string input) {
     size_t crnt_space = input.find(' ');
 
     size_t counter_beg = 0;
-    size_t counter_end;
+    size_t counter_end = 0;
 
     while (crnt_space != input.npos) {
         if (crnt_space) {
@@ -1007,6 +1019,11 @@ void fNewVariable() {
         arg_input_queue.pop();
     }
 
+    if (inp[0] == c_mark_root_graph_name) {
+        std::cout << OutErr << "variable is being named like root ('"<<c_mark_root_graph_name<<"' at beginning of the name) is not supposed to exist\n";
+        return;
+    }
+
     variables.insert(std::make_pair(inp, Variable{}));
 }
 
@@ -1075,24 +1092,61 @@ void fRenameVariable() {
 }
 
 
+void setVariableFromVariable(Variable& var, const Variable& varFrom) {
+    // so we got an interaction table
+            //
+            //     iter_from
+            //   v| i f n
+            //   -+-------
+            // i i| = f i 
+            // t  |
+            // e f| i = n
+            // r  |
+            //   n| n n =
+            //
+            // when:
+            //   = - sets variable without changes
+            //   [i|f|n] - sets variable for type,
+            //               if 'iter' side matches with value,then it would be casted approximately,
+            //               otherwise it would be casted directly how are they represent
+            //
+
+    switch (var.type) {
+    case Variable::whol:
+        switch (varFrom.type) {
+        case Variable::whol: var.value.whol = varFrom.value.whol; break;
+        case Variable::flot: var.value.whol = varFrom.value.flot; break;
+        case Variable::indx: var.value.whol = varFrom.value.whol; break;
+        } break;
+    case Variable::flot:
+        switch (varFrom.type) {
+        case Variable::whol: var.value.flot = varFrom.value.whol; break;
+        case Variable::flot: var.value.flot = varFrom.value.flot; break;
+        case Variable::indx: var.value.flot = varFrom.value.indx; break;
+        } break;
+    case Variable::indx:
+        switch (varFrom.type) {
+        case Variable::whol: var.value.flot = varFrom.value.indx; break;
+        case Variable::flot: var.value.flot = varFrom.value.indx; break;
+        case Variable::indx: var.value.flot = varFrom.value.indx; break;
+        } break;
+    }
+}
+
 void fSetVariable() {
     auto iter = variables.begin();
 
     if (argument_flag.arg_mode) {
-        inp = arg_input_queue.front();
+        iter = variables.find(arg_input_queue.front());
         arg_input_queue.pop();
-
-        iter = variables.find(inp);
         if (iter == variables.end()) { std::cout << OutErr << "the variable name wasn't found\n"; return; }
 
-        inp = arg_input_queue.front();
+             if (convertToInt(arg_input_queue.front()) == 'whol') iter->second.type = Variable::whol;
+        else if (convertToInt(arg_input_queue.front()) == 'flot') iter->second.type = Variable::flot;
+        else if (convertToInt(arg_input_queue.front()) == 'indx') iter->second.type = Variable::indx;
+        else    { std::cout << OutErr << "the value type wasn't settled\n"; arg_input_queue.pop(); return; }
         arg_input_queue.pop();
 
-             if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
-        else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
-        else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
-        else    { std::cout << OutErr << "the value type wasn't settled\n"; return; }
-        
         inp = arg_input_queue.front();
         arg_input_queue.pop();
     } else {
@@ -1114,10 +1168,28 @@ void fSetVariable() {
         std::cin >> inp;
     }
 
-    switch (iter->second.type) {
-    case Variable::whol: iter->second.value.whol = std::stoi(inp);  break;
-    case Variable::flot: iter->second.value.flot = std::stof(inp);  break;
-    case Variable::indx: iter->second.value.indx = std::stoull(inp); break;
+    if(inp[0] != c_mark_variable) {
+        switch (iter->second.type) {
+        case Variable::whol: iter->second.value.whol = std::stoi(inp);  break;
+        case Variable::flot: iter->second.value.flot = std::stof(inp);  break;
+        case Variable::indx: iter->second.value.indx = std::stoull(inp); break;
+        }
+    } else {
+        // set variable from existing value
+        if (inp[1] == c_mark_root_graph_name) {
+            // if there's a root, then all the string with gibrish would be ignored till c_mark_root_separator
+
+            constexpr const char* c_str_origin = "origin";
+
+            size_t sepFirst = inp.find_first_of(c_mark_root_separator, 2) + 1;
+
+            if (inp.substr(sepFirst, sepFirst + strlen(c_str_origin)) == c_str_origin) {
+                setVariable(iter->second, nod_origin_index);
+                
+            }
+        }
+        else setVariableFromVariable(iter->second, variables.find(inp.substr(1))->second);
+
     }
 }
 
