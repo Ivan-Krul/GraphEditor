@@ -8,9 +8,11 @@
 #include <queue>
 #include <cstring>
 #include <algorithm>
+#include <array>
+#include <map>
 
 
-#define VERSION "1.3.2"
+#define VERSION "1.3.5"
 
 #if defined(_WIN32) || defined(_WIN64) || \
   defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -78,10 +80,16 @@ struct Function {
 };
 
 
-inline int convertToInt(const std::string& str) {
+inline int convertStrToRawInt(const std::string& str) {
   int orig = *(reinterpret_cast<const int*>(str.c_str()));
   return ((orig & 0xff000000) >> 24) | ((orig & 0xff0000) >> 8) | ((orig & 0xff00) << 8) | ((orig & 0xff) << 24);
 }
+
+
+inline int convertIntToRawStr(int orig) {
+  return ((orig & 0xff000000) >> 24) | ((orig & 0xff0000) >> 8) | ((orig & 0xff00) << 8) | ((orig & 0xff) << 24);
+}
+
 
 std::unordered_map<std::string, size_t> name_map;
 std::vector<Node> graph;
@@ -108,6 +116,7 @@ bool preProcressVariablesArg();
 bool preProcressVariablesInp();
 std::ostream& OutErr(std::ostream& out);
 int enterManualMode();
+const std::map<int, void (*)()>& getCommandList();
 
 template<typename T>
 std::enable_if_t<std::is_arithmetic_v<T>, bool> fillWithVariable(T& number) {
@@ -376,9 +385,7 @@ void removeRefs(size_t targt) {
   size_t j = 0;
 
   for (i = 0; i < edges.size(); i++) {
-    refs = ((edges[i].indx_from == nod_origin_index)
-      ? edges[i].indx_to
-      : edges[i].indx_from);
+    refs = edges[i].indx_to;
 
     if (refs >= graph.size()) continue;
 
@@ -408,8 +415,16 @@ void removeAllReference(size_t targt) {
   graph.erase(graph.begin() + targt);
 
   for (auto& dict : name_map) {
-    if (dict.second >= targt)
+    if (dict.second >= targt) {
       dict.second--;
+    }
+
+    for (long long i = 0; i < graph[dict.second].edge.size(); i++) {
+      if (graph[dict.second].edge[i].indx_from >= targt)
+        graph[dict.second].edge[i].indx_from--;
+      if (graph[dict.second].edge[i].indx_to >= targt)
+        graph[dict.second].edge[i].indx_to--;
+    }
   }
 }
 
@@ -718,6 +733,7 @@ Commands:\n\
 \tcall - call a function, which execute all from argument list\n\
 \treff - refresh functions from .func\n\
 \tremf - remove a function\n\
+\tseef - output the function body\n\
 \tnewv - create a variable\n\
 \tremv - remove the variable\n\
 \tlstv - list all variables\n\
@@ -753,11 +769,13 @@ Also for variables:\n\
 \tThe variable can not be named with _ at the beginning\n\
 \t$_:size - size of the graph\n\
 \t$_:origin - origin from where the operation can be passed\n\
-\t$_[your index or your variable or the variable name] - index to the node\n\
-\t$_[your index or your variable or the variable name][your index or your variable or the variable name] - boolean is the edge between these 2 nodes exists\n\
-\t$_[your index or your variable or the variable name][your index or your variable or the variable name]:[to | from | cost] - the property to the edge\n\
-\t$_[your index or your variable or the variable name]:edges - amount of edges in the node\n\
-\t$_[your index or your variable or the variable name]:edges[your index or your variable]:[to | from | cost] - the property to the edge in indexed edges in the node\n\
+\tdefinition: (your index or your variable or the variable name) (abbr. IN) - indexing based on node index\n\
+\tdefinition: (your index or your variable) (abbr. IE) - indexing based on edge index in a node\n\
+\t$_[IN] - index to the node\n\
+\t$_[IN][IN] - boolean is the edge between these 2 nodes exists\n\
+\t$_[IN][IN]:[to | from | cost] - the property to the edge\n\
+\t$_[IN]:edges - amount of edges in the node\n\
+\t$_[IN]:edges[IE]:[to | from | cost] - the property to the edge in indexed edges in the node\n\
 \n";
 }
 
@@ -1024,6 +1042,35 @@ void fRemoveFunction() {
 }
 
 
+void fLookAtFunction() {
+  checkValidArgumentCount(1);
+  if (argument_flag.arg_mode) {
+    inp = arg_input_queue.front();
+    arg_input_queue.pop();
+  } else {
+    std::cout << "Function: ";
+    std::getline(std::cin >> std::ws, inp);
+  }
+
+  const auto iterf = (inp[0] == c_mark_temp_function) ? temp_functions.find(inp)->second : functions.find(inp)->second;
+  auto queue = iterf.input_queue;
+  auto iter = getCommandList().begin();
+  size_t var = 0;
+
+  std::cout << "\nFunction body" << (iterf.require_cache ? "(work with cache)" : "") << ":";
+  while(!queue.empty()) {
+    iter = getCommandList().find(convertStrToRawInt(queue.front()));
+    if (iter != getCommandList().end()) {
+      var = convertIntToRawStr(iter->first);
+      std::cout << "\n\t" << (char*)&var;
+    }
+    else std::cout << " " << queue.front();
+    queue.pop();
+  }
+  std::cout << '\n';
+}
+
+
 bool isPythonMissing() {
   return system(
 #ifdef Windows
@@ -1248,9 +1295,9 @@ decltype(variables.begin()) getInputForSetVariable() {
     arg_input_queue.pop();
     if (checkVariableName(iter)) { std::cout << OutErr << "the variable has no match with the name\n"; return variables.end(); }
 
-    if (convertToInt(arg_input_queue.front()) == 'whol') iter->second.type = Variable::whol;
-    else if (convertToInt(arg_input_queue.front()) == 'flot') iter->second.type = Variable::flot;
-    else if (convertToInt(arg_input_queue.front()) == 'indx') iter->second.type = Variable::indx;
+    if (convertStrToRawInt(arg_input_queue.front()) == 'whol') iter->second.type = Variable::whol;
+    else if (convertStrToRawInt(arg_input_queue.front()) == 'flot') iter->second.type = Variable::flot;
+    else if (convertStrToRawInt(arg_input_queue.front()) == 'indx') iter->second.type = Variable::indx;
     else { std::cout << OutErr << "the value type wasn't settled\n"; arg_input_queue.pop(); return variables.end(); }
     arg_input_queue.pop();
 
@@ -1266,9 +1313,9 @@ decltype(variables.begin()) getInputForSetVariable() {
     std::cout << "Type [whol(eq. int) / flot(eq. float) / indx]: ";
     std::cin >> inp;
 
-    if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
-    else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
-    else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
+    if (convertStrToRawInt(inp) == 'whol') iter->second.type = Variable::whol;
+    else if (convertStrToRawInt(inp) == 'flot') iter->second.type = Variable::flot;
+    else if (convertStrToRawInt(inp) == 'indx') iter->second.type = Variable::indx;
     else { std::cout << OutErr << "the value type wasn't settled\n"; return variables.end(); }
 
     std::cout << "Value: ";
@@ -1613,6 +1660,47 @@ bool preProcressVariablesArg() {
 }
 
 
+const std::map<int,void (*)()> c_command_list = {
+  {'newp',fNewPoint           },
+  {'newe',fNewEdge            },
+  {'seto',fSetOrigin          },
+  {'remp',fRemovePoint        },
+  {'reme',fRemoveEdge         },
+  {'renm',fRenamePoint        },
+  {'list',fList               },
+  {'dict',fDictionPoint       },
+  {'save',fSaveGraph          },
+  {'load',fLoadGraph          },
+  {'clir',fClear              },
+  {'help',fHelp               },
+  {'rset',fReset              },
+  {'lsta',fListAll            },
+  {'tmpi',parseCache          },
+  {'tmpo',generateTempCache   },
+  {'newf',fNewFunction        },
+  {'lstf',fListFunctions      },
+  {'call',fCallFunction       },
+  {'reff',refreshFromDotFunc  },
+  {'remf',fRemoveFunction     },
+  {'seef',fLookAtFunction     },
+  {'newv',fNewVariable        },
+  {'remv',fRemoveVariable     },
+  {'lstv',fListVariables      },
+  {'renv',fRenameVariable     },
+  {'setv',fSetVariable        },
+  {'incv',fIncrementVariable  },
+  {'decv',fDecrementVariable  },
+  {'outv',fOutputVariable     },
+  {'ersl',fEraseLocalVariables},
+  {'fndk',fSearchKeyword      },
+  {'fnds',fSearchSimilarMap   },
+  {'file',fFile               },
+  {'exit',nullptr             }
+};
+
+decltype(c_command_list)& getCommandList() { return c_command_list; }
+
+
 int init(const int args, const char* argv[], size_t& arg_count) {
   argument_flag.need_to_override_when_halts = false;
   argument_flag.halt = false;
@@ -1654,44 +1742,13 @@ int init(const int args, const char* argv[], size_t& arg_count) {
 
 void executeIntCommand(int input) {
   try {
-    switch (input) {
-    case 'newp': fNewPoint();            break;
-    case 'newe': fNewEdge();             break;
-    case 'seto': fSetOrigin();           break;
-    case 'remp': fRemovePoint();         break;
-    case 'reme': fRemoveEdge();          break;
-    case 'renm': fRenamePoint();         break;
-    case 'list': fList();                break;
-    case 'dict': fDictionPoint();        break;
-    case 'save': fSaveGraph();           break;
-    case 'load': fLoadGraph();           break;
-    case 'clir': fClear();               break;
-    case 'help': fHelp();                break;
-    case 'rset': fReset();               break;
-    case 'lsta': fListAll();             break;
-    case 'tmpi': parseCache();           break;
-    case 'tmpo': generateTempCache();    break;
-    case 'newf': fNewFunction();         break;
-    case 'lstf': fListFunctions();       break;
-    case 'call': fCallFunction();        break;
-    case 'reff': refreshFromDotFunc();   break;
-    case 'remf': fRemoveFunction();      break;
-    case 'newv': fNewVariable();         break;
-    case 'remv': fRemoveVariable();      break;
-    case 'lstv': fListVariables();       break;
-    case 'renv': fRenameVariable();      break;
-    case 'setv': fSetVariable();         break;
-    case 'incv': fIncrementVariable();   break;
-    case 'decv': fDecrementVariable();   break;
-    case 'outv': fOutputVariable();      break;
-    case 'ersl': fEraseLocalVariables(); break;
-    case 'fndk': fSearchKeyword();       break;
-    case 'fnds': fSearchSimilarMap();    break;
-    case 'file': fFile();                break;
-
-    default: std::cout << "invl\n";         break;
-    case 'exit': argument_flag.exit = true; break;
+    auto command = c_command_list.find(input);
+    if (command == c_command_list.end()) {
+      std::cout << "invl\n";
+      return;
     }
+    if (command->second) command->second();
+    else argument_flag.exit = true;
   } catch (const std::exception e) {
     std::cout << "excp: " << e.what() << '\n';
   }
@@ -1725,7 +1782,7 @@ void loopArgumentInputQueue(size_t arg_queue_size) {
       arg_input_queue = insertQueueToFrontQueue(arg_input_queue, pushInpToQueue(str));
       was = arg_input_queue.size();
     } else {
-      const int num = convertToInt(arg_input_queue.front());
+      const int num = convertStrToRawInt(arg_input_queue.front());
       arg_input_queue.pop();
       executeIntCommand(num);
     }
@@ -1762,7 +1819,7 @@ int enterManualMode() {
     std::getline(std::cin >> std::ws, inp);
 
     if(inp.find(' ') == inp.npos)
-      executeIntCommand(convertToInt(inp));
+      executeIntCommand(convertStrToRawInt(inp));
     else {
       argument_flag.arg_mode = true;
 
