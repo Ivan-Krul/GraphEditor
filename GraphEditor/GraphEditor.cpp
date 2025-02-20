@@ -91,6 +91,9 @@ std::string inp = "";
 struct {
   bool arg_mode : 1;
   bool debug_mode : 1;
+  bool halt : 1;
+  bool need_to_override_when_halts : 1;
+  bool exit : 1;
 } argument_flag;
 
 std::unordered_map<std::string, Variable> variables;
@@ -104,6 +107,7 @@ void loopArgumentInputQueue(const size_t arg_queue_size);
 bool preProcressVariablesArg();
 bool preProcressVariablesInp();
 std::ostream& OutErr(std::ostream& out);
+int enterManualMode();
 
 template<typename T>
 std::enable_if_t<std::is_arithmetic_v<T>, bool> fillWithVariable(T& number) {
@@ -257,7 +261,11 @@ std::enable_if_t<std::is_arithmetic_v<T>> setVariable(Variable& var, T number) {
   }
 }
 
-inline std::ostream& OutErr(std::ostream& out) { if(argument_flag.arg_mode) out << "eror: "; return out; }
+inline std::ostream& OutErr(std::ostream& out) { 
+  if(argument_flag.arg_mode) out << "eror: ";
+  argument_flag.halt = true;
+  return out;
+}
 
 void embedEdge(Edge& edg) {
   inputNumber(edg.cost, "cost");
@@ -709,7 +717,7 @@ Commands:\n\
 \tlstf - list loadedd functions\n\
 \tcall - call a function, which execute all from argument list\n\
 \treff - refresh functions from .func\n\
-\tremf\n\
+\tremf - remove a function\n\
 \tnewv - create a variable\n\
 \tremv - remove the variable\n\
 \tlstv - list all variables\n\
@@ -718,9 +726,9 @@ Commands:\n\
 \toutv - output a single variable ($ before variable name)\n\
 \tincv - increment a single variable as index ($ before variable name)\n\
 \tdecv - decrement a single variable as index ($ before variable name)\n\
-\tfndk\n\
-\tfnds\n\
-\tersl\n\
+\tfndk - find node names with a certain keyword (it is sensitive to capitalisations)\n\
+\tfnds - find node names with a similar writing (it is sensitive to capitalisations)\n\
+\tersl - erase unsavable entries of functions and variables\n\
 \tfile - extract commands from file and execute them\n\
 \texit - exit\n\
 \n\
@@ -736,8 +744,21 @@ In argument mode:\n\
 \t[-o] - alias to \"save\"\n\
 \t[-temp [i | o]] - alias to \"tmpi\" or \"tmpo\"\n\
 \n\
+\Also for functions:\n\
+\tFunctions can be with ! at the beginning to signature that they would not make an entry to .func\n\
+\tThese functions are not savable\n\
 Also for variables:\n\
-\t[$(existing variable's name)] - insert variable's value right in to fields \n";
+\t[$(existing variable's name)] - insert variable's value right in to fields \n\
+\tWhen you set the variable, you can set from graph values with $_\n\
+\tThe variable can not be named with _ at the beginning\n\
+\t$_:size - size of the graph\n\
+\t$_:origin - origin from where the operation can be passed\n\
+\t$_[your index or your variable or the variable name] - index to the node\n\
+\t$_[your index or your variable or the variable name][your index or your variable or the variable name] - boolean is the edge between these 2 nodes exists\n\
+\t$_[your index or your variable or the variable name][your index or your variable or the variable name]:[to | from | cost] - the property to the edge\n\
+\t$_[your index or your variable or the variable name]:edges - amount of edges in the node\n\
+\t$_[your index or your variable or the variable name]:edges[your index or your variable]:[to | from | cost] - the property to the edge in indexed edges in the node\n\
+\n";
 }
 
 
@@ -954,13 +975,13 @@ void fCallFunction() {
   else {
     std::cout << "Function: ";
     std::getline(std::cin >> std::ws, inp);
+    argument_flag.arg_mode = true;
   }
 
   const auto orig_arg_input_queue = arg_input_queue;
   const auto& func = (inp[0] == c_mark_temp_function) ? temp_functions.at(inp) : functions.at(inp);
 
-  arg_input_queue = func.input_queue;
-  argument_flag.arg_mode = true;
+  arg_input_queue = func.input_queue;  
 
   if (func.require_cache) {
     const auto orig_graph = graph;
@@ -980,7 +1001,6 @@ void fCallFunction() {
   }
 
   arg_input_queue = orig_arg_input_queue;
-  argument_flag.arg_mode = false;
   std::cout << '\n';
 }
 
@@ -1183,45 +1203,55 @@ void setVariableFromVariable(Variable& var, const Variable& varFrom) {
   }
 } 
 
-
-size_t getIndexInsideScopes(size_t& sepFirst) {
-  size_t sepSecond = inp.find_first_of(c_mark_index_scope_cl, ++sepFirst);
+size_t getInsideScopeGeneric(size_t& openScopeIndexInp, size_t& closScopeIndexInp) {
+  closScopeIndexInp = inp.find_first_of(c_mark_index_scope_cl, ++openScopeIndexInp);
   size_t index = 0;
 
-  if (inp[sepFirst] == c_mark_variable) {
-    sepFirst++;
-    auto iter_from = variables.find(inp.substr(sepFirst, sepSecond - sepFirst));
+  if (closScopeIndexInp == -1) return -1;
+
+  if (inp[openScopeIndexInp] == c_mark_variable) { // variable
+    openScopeIndexInp++;
+    auto iter_from = variables.find(inp.substr(openScopeIndexInp, closScopeIndexInp - openScopeIndexInp));
     if (checkVariableName(iter_from)) return -1;
 
     index = iter_from->second.value.indx;
-  } else if (isdigit(inp[sepFirst]) != 0)
-    index = std::stoull(inp.substr(sepFirst, sepSecond - sepFirst));
-  else {
-    sepFirst++;
-    auto iter_from = name_map.find(inp.substr(sepFirst, sepSecond - sepFirst));
-    if (checkGraphName(iter_from)) return -1;
+  } else if (isdigit(inp[openScopeIndexInp]) != 0) // digit
+    index = std::stoull(inp.substr(openScopeIndexInp, closScopeIndexInp - openScopeIndexInp));
+  else return -2; // there should be an external value
 
-    index = iter_from->second;
-  }
+  openScopeIndexInp = closScopeIndexInp;
+
+  return index;
+}
+
+size_t getGraphIndexInsideScopes(size_t& sepFirst) {
+  size_t sepSecond;
+  size_t index = 0;
+  index = getInsideScopeGeneric(sepFirst, sepSecond);
+
+  if (index == -1) return -1;
+  if (index != -2) return index;
+
+  sepFirst++;
+  auto iter_from = name_map.find(inp.substr(sepFirst, sepSecond - sepFirst));
+  if (checkGraphName(iter_from)) return -1;
 
   sepFirst = sepSecond;
 
   return index;
 }
 
-void fSetVariable() {
-  checkValidArgumentCount(3);
-  auto iter = variables.begin();
-
+decltype(variables.begin()) getInputForSetVariable() {
+  auto iter = variables.end();
   if (argument_flag.arg_mode) {
     iter = variables.find(arg_input_queue.front());
     arg_input_queue.pop();
-    if (checkVariableName(iter)) return;
+    if (checkVariableName(iter)) { std::cout << OutErr << "the variable has no match with the name\n"; return variables.end(); }
 
     if (convertToInt(arg_input_queue.front()) == 'whol') iter->second.type = Variable::whol;
     else if (convertToInt(arg_input_queue.front()) == 'flot') iter->second.type = Variable::flot;
     else if (convertToInt(arg_input_queue.front()) == 'indx') iter->second.type = Variable::indx;
-    else  { std::cout << OutErr << "the value type wasn't settled\n"; arg_input_queue.pop(); return; }
+    else { std::cout << OutErr << "the value type wasn't settled\n"; arg_input_queue.pop(); return variables.end(); }
     arg_input_queue.pop();
 
     inp = arg_input_queue.front();
@@ -1231,7 +1261,7 @@ void fSetVariable() {
     std::getline(std::cin >> std::ws, inp);
 
     iter = variables.find(inp);
-    if (checkVariableName(iter)) return;
+    if (checkVariableName(iter)) { std::cout << OutErr << "the variable has no match with the name\n"; return variables.end(); }
 
     std::cout << "Type [whol(eq. int) / flot(eq. float) / indx]: ";
     std::cin >> inp;
@@ -1239,11 +1269,145 @@ void fSetVariable() {
     if (convertToInt(inp) == 'whol') iter->second.type = Variable::whol;
     else if (convertToInt(inp) == 'flot') iter->second.type = Variable::flot;
     else if (convertToInt(inp) == 'indx') iter->second.type = Variable::indx;
-    else  { std::cout << OutErr << "the value type wasn't settled\n"; return; }
+    else { std::cout << OutErr << "the value type wasn't settled\n"; return variables.end(); }
 
     std::cout << "Value: ";
     std::cin >> inp;
   }
+  return iter;
+}
+
+void setVariableFromEdge(size_t& sepFirst, decltype(variables.begin())& iter, size_t indexNod, size_t indexEdg) {
+  if (inp[++sepFirst] != c_mark_root_separator) {
+    //setVariable<size_t>(iter->second, 1); // it can be as the condition
+    std::cout << OutErr << "there's no separator after index scopes\n";
+    return;
+  }
+
+  constexpr const char* c_str_from = "from";
+  constexpr const char* c_str_to = "to";
+  constexpr const char* c_str_cost = "cost";
+
+  if (strcmp(inp.data() + sepFirst + 1, c_str_from) == 0)      setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_from);
+  else if (strcmp(inp.data() + sepFirst + 1, c_str_to) == 0)   setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_to);
+  else if (strcmp(inp.data() + sepFirst + 1, c_str_cost) == 0) setVariable(iter->second, graph[indexNod].edge[indexEdg].cost);
+  else std::cout << OutErr << "no variable type isn't matching\n";
+}
+
+void setVariableFromNode(size_t& sepFirst, decltype(variables.begin())& iter, size_t indexNod) {
+  // the user wants to get the property of the node
+  constexpr const char* c_str_edges = "edges";
+
+  if (strcmp(inp.substr(sepFirst + 1, strlen(c_str_edges)).c_str(), c_str_edges) == 0) {
+    sepFirst = inp.find_first_of(c_mark_index_scope_op, sepFirst + 1); // we could be at [
+    if (sepFirst == -1) {
+      setVariable(iter->second, graph[indexNod].edge.size());
+      return;
+    }
+
+    size_t s = 0;
+    size_t indexEdg = getInsideScopeGeneric(sepFirst, s);
+
+    if (indexEdg == -1 || indexEdg == -2) {
+      std::cout << OutErr << "the index isn't in the range of the current edge index\n";
+      return;
+    }
+
+    setVariableFromEdge(sepFirst, iter, indexNod, indexEdg);
+  } else std::cout << OutErr << "the demanding property from the node is unclear\n";
+
+  return;
+}
+
+void setVariableFromGraphProperty(size_t& sepFirst, decltype(variables.begin())& iter) {
+  constexpr const char* c_str_origin = "origin";
+  constexpr const char* c_str_size = "size";
+
+  sepFirst = inp.find_first_of(c_mark_root_separator, 2);
+  if (sepFirst == -1) {
+    std::cout << OutErr << "there's no separator after root variable\n";
+    return;
+  }
+
+  sepFirst++;
+
+  if (strcmp(inp.substr(sepFirst, strlen(c_str_origin)).c_str(), c_str_origin) == 0) setVariable(iter->second, nod_origin_index);
+  else if (strcmp(inp.substr(sepFirst, strlen(c_str_size)).c_str(), c_str_size) == 0) setVariable(iter->second, graph.size());
+  else std::cout << OutErr << "the demanding property is unclear to get from the graph itself\n";
+}
+
+size_t chechIndexInputFromBracket(size_t& sepFirst) {
+  size_t index = getGraphIndexInsideScopes(sepFirst); // sepFirst should be at last ]
+
+  if (index == -1) {
+    std::cout << OutErr << "the index wasn't found or is illegal to set\n";
+    return -1;
+  }
+  if (checkGraphRange(index)) {
+    std::cout << OutErr << "the index isn't in the range of the graph\n";
+    return -1;
+  }
+  return index;
+}
+
+size_t getIndexToFromBracket(size_t& sepFirst, size_t indexNod) {
+  size_t indexTo = chechIndexInputFromBracket(sepFirst); // sepFirst should be at last ]
+  if (indexTo == -1) return -1;
+
+  bool is_connected = false;
+  size_t indexEdg = -1;
+
+  for (size_t i = 0; i < graph[indexNod].edge.size(); i++) {
+    if (graph[indexNod].edge[i].indx_to == indexTo) {
+      is_connected = true;
+      indexEdg = i;
+      break;
+    }
+  }
+
+  if (!is_connected) {
+    if (inp.find_first_of(sepFirst, c_mark_root_separator) != -1) { // it can be as the condition
+      std::cout << OutErr << "the index isn't connected to the graph\n";
+      return -1;
+    }
+    return -2;
+  }
+
+  return indexEdg;
+}
+
+void setVariableWithBrackets(size_t sepFirst, decltype(variables.begin())& iter) {
+  // indexing with various methods
+  size_t indexNod = chechIndexInputFromBracket(sepFirst); // sepFirst is at ]
+  if (indexNod == -1) return;
+
+  // we need to sure that we get into the properties of the node
+  sepFirst = inp.find_first_of(c_mark_root_separator, sepFirst + 1);
+
+  if (sepFirst != -1) {
+    setVariableFromNode(sepFirst, iter, indexNod);
+    return;
+  }
+
+  sepFirst = inp.find_first_of(c_mark_index_scope_op, 4);
+  if (sepFirst == -1) { // default: get the index of the node
+    setVariable(iter->second, indexNod);
+    return;
+  }
+
+  // if we went there, that means, that we need edge
+  size_t indexEdg = getIndexToFromBracket(sepFirst, indexNod);
+  if (indexEdg == -1) return;
+  if (indexEdg == -2) setVariable<size_t>(iter->second, 0);
+
+  setVariableFromEdge(sepFirst, iter, indexNod, indexEdg);
+  return;
+}
+
+void fSetVariable() {
+  checkValidArgumentCount(3);
+  auto iter = getInputForSetVariable();
+  if (iter == variables.end()) return;
 
   if(inp[0] != c_mark_variable) {
     switch (iter->second.type) {
@@ -1251,60 +1415,26 @@ void fSetVariable() {
     case Variable::flot: iter->second.value.flot = std::stof(inp);  break;
     case Variable::indx: iter->second.value.indx = std::stoull(inp); break;
     }
-  } else {
-    // set variable from existing value
-    if (inp[1] == c_mark_root_graph_name) {
-      // if there's a root, then all the string with gibrish would be ignored till c_mark_root_separator
-      // \$_\.\[($\w+|\d+|[^_]\w*)\]\[($\w+|\d+|[^_]\w*)\]\.(from|to|cost)
-
-      constexpr const char* c_str_origin = "origin";
-
-      size_t sepFirst = inp.find_first_of(c_mark_root_separator, 2) + 1; // that's a huge mess
-
-      if (inp[sepFirst] == c_mark_index_scope_op) {
-        // indexing with various methods
-        size_t indexNod = getIndexInsideScopes(sepFirst);
-
-        if (indexNod == -1) return;
-        if (checkGraphRange(indexNod)) return;
-
-        if (inp[++sepFirst] != c_mark_index_scope_op) {
-          std::cout << OutErr << "there's no edge index scope after node index scope\n";
-          return;
-        }
-
-        size_t indexEdg = getIndexInsideScopes(sepFirst);
-        if (indexEdg == -1) return;
-        if (indexEdg >= graph[indexNod].edge.size()) {
-          std::cout << OutErr << "direct index of graph edges is out of range\n";
-          return;
-        }
-
-        if (inp[++sepFirst] != c_mark_root_separator) {
-          std::cout << OutErr << "there's no separator after index scopes\n";
-          return;
-        }
-
-        constexpr const char* c_str_from = "from";
-        constexpr const char* c_str_to   = "to";
-        constexpr const char* c_str_cost = "cost";
-
-        if (strcmp(inp.data() + sepFirst + 1, c_str_from) == 0)
-          setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_from);
-        else if (strcmp(inp.data() + sepFirst + 1, c_str_to) == 0)
-          setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_to);
-        else if (strcmp(inp.data() + sepFirst + 1, c_str_cost) == 0)
-          setVariable(iter->second, graph[indexNod].edge[indexEdg].cost);
-        else {
-          std::cout << OutErr << "no variable type isn't matching\n";
-          return;
-        }
-      }
-      else if (inp.substr(2, strlen(c_str_origin)) == c_str_origin) setVariable(iter->second, nod_origin_index);
-    }
-    else setVariableFromVariable(iter->second, variables.find(inp.substr(1))->second);
-
+    return;
   }
+
+  // set variable from existing value
+  if (inp[1] != c_mark_root_graph_name) {
+    setVariableFromVariable(iter->second, variables.find(inp.substr(1))->second);
+    return;
+  }
+
+  // variable manipulation
+  size_t sepFirst = inp.find_first_of(c_mark_index_scope_op, 2);
+
+  if (sepFirst != -1) {
+    setVariableWithBrackets(sepFirst, iter);
+    return;
+  }
+  
+  // there has to be a separator to interact with graph properties
+  setVariableFromGraphProperty(sepFirst, iter);
+  return;
 }
 
 
@@ -1484,6 +1614,10 @@ bool preProcressVariablesArg() {
 
 
 int init(const int args, const char* argv[], size_t& arg_count) {
+  argument_flag.need_to_override_when_halts = false;
+  argument_flag.halt = false;
+  argument_flag.exit = false;
+
   if (args > 1) {
     const char* arg = argv[arg_count];
     if (strcmp(arg, "--version") == 0 || strcmp(arg, "-v") == 0) {
@@ -1498,6 +1632,7 @@ int init(const int args, const char* argv[], size_t& arg_count) {
       return 2;
     } else if (strcmp(arg, "-a") == 0 || strcmp(arg, "--argument") == 0) {
       argument_flag.arg_mode = true;
+      argument_flag.need_to_override_when_halts = true;
       arg = argv[++arg_count];
     } else if (strcmp(arg, "-f") == 0 || strcmp(arg, "--file") == 0) {
       extractFromFileToQueue(arg_count);
@@ -1554,8 +1689,8 @@ void executeIntCommand(int input) {
     case 'fnds': fSearchSimilarMap();    break;
     case 'file': fFile();                break;
 
-    default: std::cout << "invl\n"; [[fallthrough]];
-    case 'exit': break;
+    default: std::cout << "invl\n";         break;
+    case 'exit': argument_flag.exit = true; break;
     }
   } catch (const std::exception e) {
     std::cout << "excp: " << e.what() << '\n';
@@ -1564,7 +1699,7 @@ void executeIntCommand(int input) {
 
 void loopArgumentInputQueue(size_t arg_queue_size) {
   auto was = arg_input_queue.size();
-  while (arg_input_queue.size()) {
+  while (arg_input_queue.size() && !argument_flag.halt && !argument_flag.exit) {
     std::cout << was - arg_input_queue.size() << ' ';
     if (arg_input_queue.front() == "-i") {
       arg_input_queue.pop();
@@ -1595,6 +1730,10 @@ void loopArgumentInputQueue(size_t arg_queue_size) {
       executeIntCommand(num);
     }
   }
+  if (argument_flag.halt) {
+    if (argument_flag.need_to_override_when_halts) enterManualMode();
+    else argument_flag.arg_mode = false;
+  }
 }
 
 int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
@@ -1611,7 +1750,8 @@ int enterArgumentMode(const int args, const char* argv[], size_t arg_count) {
 }
 
 int enterManualMode() {
-  while (convertToInt(inp) != 'exit') {
+  while (!argument_flag.exit) {
+    argument_flag.halt = false;
     std::cout << "|";
     if (nod_origin_index < graph.size())
       std::cout << '"' << graph[nod_origin_index].name.c_str() << '"';
@@ -1639,7 +1779,7 @@ int enterManualMode() {
 
 int main(const int args, const char* argv[]) {
   size_t arg_count = 1;
-
+  
   int argRet = init(args, argv, arg_count);
   if (argRet > 0 && !argument_flag.arg_mode) return 2 - argRet;
 
