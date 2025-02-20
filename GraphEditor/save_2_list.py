@@ -25,7 +25,7 @@ def save():
 
     file.close()
 
-    file = open(f"Nodes {sys.argv[1]}.grf", 'w')
+    file = open(f"{sys.argv[1]} nodes.grf", 'w')
 
     for node in graph:
         file.write(f"{node['name']}")

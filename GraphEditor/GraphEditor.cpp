@@ -12,7 +12,7 @@
 #include <map>
 
 
-#define VERSION "1.3.5"
+#define VERSION "1.4.0"
 
 #if defined(_WIN32) || defined(_WIN64) || \
   defined(__WIN32__) || defined(__TOS_WIN__) || \

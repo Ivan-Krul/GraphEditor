@@ -25,7 +25,7 @@ def insert_to_main():
 def read2files():
     arr = []
     try:
-        file = open(f"Nodes {sys.argv[1]}.grf", 'r')
+        file = open(f"{sys.argv[1]} nodes.grf", 'r')
     except:
         print("node file wasn't found")
         exit(1)
