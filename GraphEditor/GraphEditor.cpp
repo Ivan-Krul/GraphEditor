@@ -746,6 +746,10 @@ Commands:\n\
 \tfnds - find node names with a similar writing (it is sensitive to capitalisations)\n\
 \tersl - erase unsavable entries of functions and variables\n\
 \tfile - extract commands from file and execute them\n\
+\taddv - add between variables ($ before variable name)\n\
+\tsubv - subtract between variables ($ before variable name)\n\
+\tmulv - multiply between variables ($ before variable name)\n\
+\tdivv - divide between variables ($ before variable name)\n\
 \texit - exit\n\
 \n\
 Also exists custom arguments:\n\
@@ -769,7 +773,7 @@ Also for variables:\n\
 \tThe variable can not be named with _ at the beginning\n\
 \t$_:size - size of the graph\n\
 \t$_:origin - origin from where the operation can be passed\n\
-\tdefinition: (your index or your variable or the variable name) (abbr. IN) - indexing based on node index\n\
+\tdefinition: (your index or your variable or the variable name with $) (abbr. IN) - indexing based on node index\n\
 \tdefinition: (your index or your variable) (abbr. IE) - indexing based on edge index in a node\n\
 \t$_[IN] - index to the node\n\
 \t$_[IN][IN] - boolean is the edge between these 2 nodes exists\n\
@@ -1533,6 +1537,147 @@ void fDecrementVariable() {
 }
 
 
+void fAddVariable() {
+  checkValidArgumentCount(2);
+  if (!argument_flag.arg_mode) std::cout << "Variable to be added: ";
+  auto iterin = getVariableInstance();
+  if (checkVariableName(iterin)) return;
+
+  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
+  auto iterfrom = getVariableInstance();
+  if (checkVariableName(iterfrom)) return;
+
+  auto& var = iterin->second;
+  const auto& varFrom = iterfrom->second;
+
+  switch (var.type) {
+  case Variable::whol:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.whol += varFrom.value.whol; break;
+    case Variable::flot: var.value.whol += varFrom.value.flot; break;
+    case Variable::indx: var.value.whol += varFrom.value.indx; break;
+    } break;
+  case Variable::flot:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.flot += varFrom.value.whol; break;
+    case Variable::flot: var.value.flot += varFrom.value.flot; break;
+    case Variable::indx: var.value.flot += varFrom.value.indx; break;
+    } break;
+  case Variable::indx:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.indx += varFrom.value.whol; break;
+    case Variable::flot: var.value.indx += varFrom.value.flot; break;
+    case Variable::indx: var.value.indx += varFrom.value.indx; break;
+    } break;
+  }
+}
+
+void fSubVariable() {
+  checkValidArgumentCount(2);
+  if (!argument_flag.arg_mode) std::cout << "Variable to be subtracted: ";
+  auto iterin = getVariableInstance();
+  if (checkVariableName(iterin)) return;
+
+  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
+  auto iterfrom = getVariableInstance();
+  if (checkVariableName(iterfrom)) return;
+
+  auto& var = iterin->second;
+  const auto& varFrom = iterfrom->second;
+
+  switch (var.type) {
+  case Variable::whol:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.whol -= varFrom.value.whol; break;
+    case Variable::flot: var.value.whol -= varFrom.value.flot; break;
+    case Variable::indx: var.value.whol -= varFrom.value.indx; break;
+    } break;
+  case Variable::flot:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.flot -= varFrom.value.whol; break;
+    case Variable::flot: var.value.flot -= varFrom.value.flot; break;
+    case Variable::indx: var.value.flot -= varFrom.value.indx; break;
+    } break;
+  case Variable::indx:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.indx -= varFrom.value.whol; break;
+    case Variable::flot: var.value.indx -= varFrom.value.flot; break;
+    case Variable::indx: var.value.indx -= varFrom.value.indx; break;
+    } break;
+  }
+}
+
+void fMulVariable() {
+  checkValidArgumentCount(2);
+  if (!argument_flag.arg_mode) std::cout << "Variable to be multiplied: ";
+  auto iterin = getVariableInstance();
+  if (checkVariableName(iterin)) return;
+
+  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
+  auto iterfrom = getVariableInstance();
+  if (checkVariableName(iterfrom)) return;
+
+  auto& var = iterin->second;
+  const auto& varFrom = iterfrom->second;
+
+  switch (var.type) {
+  case Variable::whol:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.whol *= varFrom.value.whol; break;
+    case Variable::flot: var.value.whol *= varFrom.value.flot; break;
+    case Variable::indx: var.value.whol *= varFrom.value.indx; break;
+    } break;
+  case Variable::flot:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.flot *= varFrom.value.whol; break;
+    case Variable::flot: var.value.flot *= varFrom.value.flot; break;
+    case Variable::indx: var.value.flot *= varFrom.value.indx; break;
+    } break;
+  case Variable::indx:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.indx *= varFrom.value.whol; break;
+    case Variable::flot: var.value.indx *= varFrom.value.flot; break;
+    case Variable::indx: var.value.indx *= varFrom.value.indx; break;
+    } break;
+  }
+}
+
+void fDivVariable() {
+  checkValidArgumentCount(2);
+  if (!argument_flag.arg_mode) std::cout << "Variable to be multiplied: ";
+  auto iterin = getVariableInstance();
+  if (checkVariableName(iterin)) return;
+
+  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
+  auto iterfrom = getVariableInstance();
+  if (checkVariableName(iterfrom)) return;
+
+  auto& var = iterin->second;
+  const auto& varFrom = iterfrom->second;
+
+  switch (var.type) {
+  case Variable::whol:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.whol /= varFrom.value.whol; break;
+    case Variable::flot: var.value.whol /= varFrom.value.flot; break;
+    case Variable::indx: var.value.whol /= varFrom.value.indx; break;
+    } break;
+  case Variable::flot:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.flot /= varFrom.value.whol; break;
+    case Variable::flot: var.value.flot /= varFrom.value.flot; break;
+    case Variable::indx: var.value.flot /= varFrom.value.indx; break;
+    } break;
+  case Variable::indx:
+    switch (varFrom.type) {
+    case Variable::whol: var.value.indx /= varFrom.value.whol; break;
+    case Variable::flot: var.value.indx /= varFrom.value.flot; break;
+    case Variable::indx: var.value.indx /= varFrom.value.indx; break;
+    } break;
+  }
+}
+
+
 void updateMatrixSizeLev(std::vector<size_t>& matrix, size_t& width, size_t& height, const size_t origSize, const size_t checkSize) {
   size_t i = 0;
   
@@ -1695,6 +1840,10 @@ const std::map<int,void (*)()> c_command_list = {
   {'fndk',fSearchKeyword      },
   {'fnds',fSearchSimilarMap   },
   {'file',fFile               },
+  {'addv',fAddVariable        },
+  {'subv',fSubVariable        },
+  {'mulv',fMulVariable        },
+  {'divv',fDivVariable        },
   {'exit',nullptr             }
 };
 
