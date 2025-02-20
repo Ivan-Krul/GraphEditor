@@ -5,6 +5,7 @@ It can manage any type of graph, but generally it can do undirected weighted gra
 For saving/loading your graphs you can use Python scripts to make the program more flexible.
 Also you can use CLI tools to make advanced interface for your programs.
 It can also support aliases or functions, where you can speed up your progress.
+You can also assisting with variables to produce faster results
 
 Help
 ===============
@@ -30,6 +31,8 @@ Commands:
         lstf - list loadedd functions
         call - call a function, which execute all from argument list
         reff - refresh functions from .func
+        remf - remove a function
+        seef - output the function body
         newv - create a variable
         remv - remove the variable
         lstv - list all variables
@@ -38,23 +41,44 @@ Commands:
         outv - output a single variable ($ before variable name)
         incv - increment a single variable as index ($ before variable name)
         decv - decrement a single variable as index ($ before variable name)
+        fndk - find node names with a certain keyword (it is sensitive to capitalisations)
+        fnds - find node names with a similar writing (it is sensitive to capitalisations)
+        ersl - erase unsavable entries of functions and variables
         file - extract commands from file and execute them
+        addv - add between variables ($ before variable name)
+        subv - subtract between variables ($ before variable name)
+        mulv - multiply between variables ($ before variable name)
+        divv - divide between variables ($ before variable name)
         exit - exit
 
 Also exists custom arguments:
         [--version | -v]  - get a version
-        [-d]              - enter to debug mode (cache wouldn't be erased)
-        [-h | --help]     - shows help for navigating the program
+        [-d]        - enter to debug mode (cache wouldn't be erased)
+        [-h | --help]   - shows help for navigating the program
         [--argument | -a] - enter to argument mode (you can write all commands in arguments separated by space (for names as indexes it recognise automatically))
-        [-ssa]            - you can type your input using a single string argument (f.e. -ssa "newp A newp B ...")
+        [-ssa]      - you can type your input using a single string argument (f.e. -ssa "newp A newp B ...")
 
 In argument mode:
         [-i] - alias to "load"
         [-o] - alias to "save"
         [-temp [i | o]] - alias to "tmpi" or "tmpo"
 
+Also for functions:
+        Functions can be with ! at the beginning to signature that they would not make an entry to .func
+        These functions are not savable
 Also for variables:
         [$(existing variable's name)] - insert variable's value right in to fields
+        When you set the variable, you can set from graph values with $_
+        The variable can not be named with _ at the beginning
+        $_:size - size of the graph
+        $_:origin - origin from where the operation can be passed
+        definition: (your index or your variable or the variable name with $) (abbr. IN) - indexing based on node index
+        definition: (your index or your variable) (abbr. IE) - indexing based on edge index in a node
+        $_[IN] - index to the node
+        $_[IN][IN] - boolean is the edge between these 2 nodes exists
+        $_[IN][IN]:[to | from | cost] - the property to the edge
+        $_[IN]:edges - amount of edges in the node
+        $_[IN]:edges[IE]:[to | from | cost] - the property to the edge in indexed edges in the node
 ```
 
 Installing
