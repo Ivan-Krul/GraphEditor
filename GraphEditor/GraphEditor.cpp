@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <variant>
+#include <optional>
 
 
 #define VERSION "1.4.0"
@@ -51,8 +53,8 @@ constexpr char c_mark_index_scope_cl = ']';
 struct Node;
 
 struct Edge {
-  size_t indx_to;
-  size_t indx_from;
+  unsigned int indx_to;
+  unsigned int indx_from;
   float cost;
 };
 
@@ -74,11 +76,6 @@ struct Variable {
   } type = indx;
 };
 
-struct Function {
-  std::queue<std::string> input_queue;
-  bool require_cache = false;
-};
-
 
 inline int convertStrToRawInt(const std::string& str) {
   int orig = *(reinterpret_cast<const int*>(str.c_str()));
@@ -91,8 +88,12 @@ inline int convertIntToRawStr(int orig) {
 }
 
 
+std::vector<Node> nodes;
+std::vector<Edge> edges;
+
 std::unordered_map<std::string, size_t> name_map;
-std::vector<Node> graph;
+std::vector<Node> graph;;
+
 size_t nod_origin_index = 0;
 std::string inp = "";
 
@@ -105,8 +106,12 @@ struct {
 } argument_flag;
 
 std::unordered_map<std::string, Variable> variables;
-std::unordered_map<std::string, Function> functions;
-std::unordered_map<std::string, Function> temp_functions;
+
+std::unordered_map<std::string, std::queue<std::string>>      functions;
+std::unordered_map<std::string, std::queue<std::string>>      functions_cache;
+std::unordered_map<std::string, std::queue<std::string>> temp_functions;
+std::unordered_map<std::string, std::queue<std::string>> temp_functions_cache;
+
 std::queue<std::string> arg_input_queue;
 Variable active_variable;
 
@@ -180,6 +185,8 @@ void fNewPoint() {
   inputNodeName();
 
   Node nd;
+  //name_array.emplace_back(std::make_unique<char>(inp.capacity()));
+
   nd.name = inp;
   name_map.insert(std::make_pair(inp, graph.size()));
 
@@ -415,11 +422,10 @@ void removeAllReference(size_t targt) {
   graph.erase(graph.begin() + targt);
 
   for (auto& dict : name_map) {
-    if (dict.second >= targt) {
+    if (dict.second >= targt)
       dict.second--;
-    }
 
-    for (long long i = 0; i < graph[dict.second].edge.size(); i++) {
+    for (size_t i = 0; i < graph[dict.second].edge.size(); i++) {
       if (graph[dict.second].edge[i].indx_from >= targt)
         graph[dict.second].edge[i].indx_from--;
       if (graph[dict.second].edge[i].indx_to >= targt)
@@ -885,6 +891,47 @@ std::queue<std::string> pushInpToQueue(std::string input) {
   return queue;
 }
 
+constexpr std::unordered_map<std::string, std::queue<std::string>>& getFunctionMapC(bool cached = false, bool temporary = false) {
+  if (cached) {
+    if (temporary) return temp_functions_cache;
+    else return functions_cache;
+  } else {
+    if (temporary) return temp_functions;
+    else return functions;
+  }
+}
+
+inline std::unordered_map<std::string, std::queue<std::string>>& getFunctionMap(bool cached = false, bool temporary = false) {
+  if (cached) {
+    if (temporary) return temp_functions_cache;
+    else return functions_cache;
+  }
+  else {
+    if (temporary) return temp_functions;
+    else return functions;
+  }
+}
+
+
+inline std::optional<std::pair<bool, std::queue<std::string>>> getQueue() {
+  if (inp[0] == c_mark_temp_function) {
+    auto iter = temp_functions.find(inp);
+    if (iter == temp_functions.end()) {
+      iter = temp_functions_cache.find(inp);
+      if (iter == temp_functions_cache.end()) return std::make_pair(true, iter->second);
+      else { std::cout << OutErr << "can not find the required function in temporaries" << '\n'; return {}; }
+    } else return std::make_pair(false, iter->second);
+  } else {
+    auto iter = functions.find(inp);
+    if (iter == functions.end()) {
+      iter = functions_cache.find(inp);
+      if (iter == functions_cache.end()) return std::make_pair(true, iter->second);
+      else { std::cout << OutErr << "can not find the required function" << '\n'; return {}; }
+    } else return std::make_pair(false, iter->second);
+  }
+}
+
+
 void dumpToDotFunc() {
   std::ofstream fout;
   fout.open(".func");
@@ -892,8 +939,8 @@ void dumpToDotFunc() {
   for (auto elem : functions) {
     fout << elem.first << '\t';
     
-    const size_t queue_size = elem.second.input_queue.size();
-    auto& queue = elem.second.input_queue;
+    const size_t queue_size = elem.second.size();
+    auto& queue = elem.second;
     std::vector<std::string> vec_queue;
     vec_queue.reserve(queue_size);
 
@@ -902,8 +949,22 @@ void dumpToDotFunc() {
       queue.pop();
     }
 
-    fout << queue.front() << '\t';
-    fout << (elem.second.require_cache ? "cache" : "instance") << '\n';
+    fout << queue.front() << "\tinstance\n";
+  }
+  for (auto elem : functions_cache) {
+    fout << elem.first << '\t';
+
+    const size_t queue_size = elem.second.size();
+    auto& queue = elem.second;
+    std::vector<std::string> vec_queue;
+    vec_queue.reserve(queue_size);
+
+    for (size_t i = 0; i < queue_size - 1; i++) {
+      fout << queue.front() << ' ';
+      queue.pop();
+    }
+
+    fout << queue.front() << "\cache\n";
   }
 
   fout.close();
@@ -919,20 +980,15 @@ void refreshFromDotFunc() {
   std::string name;
   size_t indexTo = 0;
 
-  Function func;
-
   while (fin) {
     indexTo = line.find('\t');
     name = line.substr(0, indexTo);
     line.erase(line.begin(), line.begin() + indexTo + 1);
 
     indexTo = line.find('\t');
-    func.input_queue = pushInpToQueue(line.substr(0, indexTo));
+
+    getFunctionMap(line == "cache").insert(std::make_pair(name, pushInpToQueue(line.substr(0, indexTo))));
     line.erase(line.begin(), line.begin() + indexTo + 1);
-
-    func.require_cache = line == "cache";
-
-    functions.insert(std::make_pair(name, func));
 
     std::getline(fin, line);
   }
@@ -942,18 +998,21 @@ void refreshFromDotFunc() {
 
 void fNewFunction() {
   checkValidArgumentCount(2);
-  Function func;
+  std::queue<std::string> q;
   std::string name;
+  bool c = false;
 
   if (argument_flag.arg_mode) {
     name = arg_input_queue.front();
     arg_input_queue.pop();
 
-    func.input_queue = pushInpToQueue(arg_input_queue.front());
+    q = pushInpToQueue(arg_input_queue.front());
     arg_input_queue.pop();
 
-    func.require_cache = arg_input_queue.front() == "cache";
-    if (arg_input_queue.front() == "cache") arg_input_queue.pop();
+    if (!arg_input_queue.empty()) {
+      c = arg_input_queue.front() == "cache";
+      if (c) arg_input_queue.pop();
+    }
   }
   else {
     std::cout << "Choose a name for a function: ";
@@ -961,29 +1020,33 @@ void fNewFunction() {
 
     std::cout << "Insert a logic for the function(as for argument mode): ";
     std::getline(std::cin >> std::ws, inp);
-    func.input_queue = pushInpToQueue(inp);
+    q = pushInpToQueue(inp);
 
     std::cout << "Does the function accepts and returns cache?(Y/[n]): ";
     std::cin >> inp;
-    func.require_cache = (inp[0] == 'Y');
+    c = (inp[0] == 'Y');
   }
 
-  if(name[0] == c_mark_temp_function)
-    temp_functions.insert(std::make_pair(name, func));
-  else {
-    functions.insert(std::make_pair(name, func));
+  getFunctionMap(c, name[0] == c_mark_temp_function).insert(std::make_pair(name, q));
+
+  if(name[0] != c_mark_temp_function)
     dumpToDotFunc();
-  }
 }
 
 
 void fListFunctions() {
   std::cout << "Functions:\n";
-  for(auto& elem : functions) {
+  for(auto& elem : getFunctionMapC()) {
     std::cout << "\t -> \"" << elem.first << "\"\n";
   }
-  for (auto& elem : temp_functions) {
+  for (auto& elem : getFunctionMapC(false, true)) {
     std::cout << "\t -> \"" << elem.first << "\" (temporary)\n";
+  }
+  for (auto& elem : getFunctionMapC(true)) {
+    std::cout << "\t -> \"" << elem.first << "\" (cached)\n";
+  }
+  for (auto& elem : getFunctionMapC(true, true)) {
+    std::cout << "\t -> \"" << elem.first << "\" (cached, temporary)\n";
   }
 }
 
@@ -1001,11 +1064,12 @@ void fCallFunction() {
   }
 
   const auto orig_arg_input_queue = arg_input_queue;
-  const auto& func = (inp[0] == c_mark_temp_function) ? temp_functions.at(inp) : functions.at(inp);
+  
+  auto queue = getQueue();
+  if (!queue.has_value()) return;
+  arg_input_queue = queue->second;
 
-  arg_input_queue = func.input_queue;  
-
-  if (func.require_cache) {
+  if (queue->first) {
     const auto orig_graph = graph;
     const auto orig_name_map = name_map;
     const auto orig_nod_origing_index = nod_origin_index;
@@ -1017,10 +1081,7 @@ void fCallFunction() {
     graph = orig_graph;
     name_map = orig_name_map;
     nod_origin_index = orig_nod_origing_index;
-  } else {
-    arg_input_queue = func.input_queue;
-    loopArgumentInputQueue(arg_input_queue.size());
-  }
+  } else loopArgumentInputQueue(arg_input_queue.size());
 
   arg_input_queue = orig_arg_input_queue;
   std::cout << '\n';
@@ -1056,20 +1117,21 @@ void fLookAtFunction() {
     std::getline(std::cin >> std::ws, inp);
   }
 
-  const auto iterf = (inp[0] == c_mark_temp_function) ? temp_functions.find(inp)->second : functions.find(inp)->second;
-  auto queue = iterf.input_queue;
+  auto queue = getQueue();
+  if (!queue.has_value()) return;
+
   auto iter = getCommandList().begin();
   size_t var = 0;
 
-  std::cout << "\nFunction body" << (iterf.require_cache ? "(work with cache)" : "") << ":";
-  while(!queue.empty()) {
-    iter = getCommandList().find(convertStrToRawInt(queue.front()));
+  std::cout << "\nFunction body" << (queue->first ? "(work with cache)" : "") << ":";
+  while(!queue->second.empty()) {
+    iter = getCommandList().find(convertStrToRawInt(queue->second.front()));
     if (iter != getCommandList().end()) {
       var = convertIntToRawStr(iter->first);
       std::cout << "\n\t" << (char*)&var;
     }
-    else std::cout << " " << queue.front();
-    queue.pop();
+    else std::cout << " " << queue->second.front();
+    queue->second.pop();
   }
   std::cout << '\n';
 }
@@ -1330,8 +1392,8 @@ decltype(variables.begin()) getInputForSetVariable() {
 
 void setVariableFromEdge(size_t& sepFirst, decltype(variables.begin())& iter, size_t indexNod, size_t indexEdg) {
   if (inp[++sepFirst] != c_mark_root_separator) {
-    //setVariable<size_t>(iter->second, 1); // it can be as the condition
-    std::cout << OutErr << "there's no separator after index scopes\n";
+    setVariable<size_t>(iter->second, 1); // it can be as the condition
+    //std::cout << OutErr << "there's no separator after index scopes\n";
     return;
   }
 
@@ -1449,7 +1511,10 @@ void setVariableWithBrackets(size_t sepFirst, decltype(variables.begin())& iter)
   // if we went there, that means, that we need edge
   size_t indexEdg = getIndexToFromBracket(sepFirst, indexNod);
   if (indexEdg == -1) return;
-  if (indexEdg == -2) setVariable<size_t>(iter->second, 0);
+  if (indexEdg == -2) {
+    setVariable<size_t>(iter->second, 0);
+    return;
+  }
 
   setVariableFromEdge(sepFirst, iter, indexNod, indexEdg);
   return;
