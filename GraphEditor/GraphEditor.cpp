@@ -283,13 +283,6 @@ inline std::ostream& OutErr(std::ostream& out) {
   return out;
 }
 
-void embedEdge(Edge& edg) {
-  inputNumber(edg.cost, "cost");
-
-  graph[edg.indx_from].edge.push_back(edg);
-  graph[edg.indx_to].edge.push_back(edg);
-}
-
 void giveChoiceUseNameAsIndex() {
   if (argument_flag.arg_mode) {
     inp = isdigit(arg_input_queue.front()[0]) || arg_input_queue.front()[0] == c_mark_variable ? "n" : "Y";
@@ -299,35 +292,52 @@ void giveChoiceUseNameAsIndex() {
   }
 }
 
+size_t handleEdgeIndexToInput() {
+  size_t targt = 0;
+  if (inp[0] == 'Y') {
+    if ((targt = getNodeIndex()) == -1) {
+      std::cout << OutErr << "not found by name\n";
+      return -1;
+    }
+  } else if (inp[0] == 'n') {
+    if (!argument_flag.arg_mode) std::cout << "index: ";
+    inputNumber(targt);
+
+    if (checkGraphRange(targt)) return -1;
+
+    if (targt == nod_origin_index) {
+      std::cout << OutErr << "index is the same with origin\n";
+      return -1;
+    }
+  } else {
+    std::cout << OutErr << "way of input is undefined\n";
+    return -1;
+  }
+  return targt;
+}
+
 void fNewEdge() {
   if (graph.size() < 2) return;
   checkValidArgumentCount(2);
   giveChoiceUseNameAsIndex();
 
-  if (inp[0] == 'Y') {
-    Edge edg = { 0 };
-    edg.indx_from = nod_origin_index;
+  Edge edg = { 0 };
+  edg.indx_from = nod_origin_index;
+  edg.cost = NAN;
 
-    if ((edg.indx_to = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
+  if ((edg.indx_to = handleEdgeIndexToInput()) == -1) return;
 
-    embedEdge(edg);
-  } else if (inp[0] == 'n') {
-    Edge edg = { 0 };
-    edg.indx_from = nod_origin_index;
-
-    inputNumber(edg.indx_to);
-
-    if (checkGraphRange(edg.indx_to)) return;
-
-    if (edg.indx_to == nod_origin_index) {
-      std::cout << OutErr << "index is the same with origin\n";
-      return;
-    }
-
-    embedEdge(edg);
-  }
+  graph[edg.indx_from].edge.push_back(edg);
+  graph[edg.indx_to].edge.push_back(edg);
 }
 
+
+inline size_t getEdgeIndex(size_t indx_from, size_t indx_to) {
+  for (size_t i = 0; i < graph[indx_from].edge.size(); i++) {
+    if (graph[indx_from].edge[i].indx_to == indx_to) return i;
+  }
+  return -1;
+}
 
 void fList() {
   if (graph.empty()) return;
@@ -344,7 +354,13 @@ void fList() {
 
     std::cout << '\t';
 
-    if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
+    if (cur.edge[i].cost == NAN) {
+      std::cout << "nous ";
+      
+      if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
+      else std::cout << graph[nod_to].name;
+    }
+    else if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
     else std::cout << graph[nod_to].name;
 
     std::cout << " -> " << cur.edge[i].cost << '\n';
@@ -462,6 +478,85 @@ void fRemovePoint() {
 }
 
 
+int inputDirection() {
+  std::string direct_str;
+  if (argument_flag.arg_mode) {
+    direct_str = arg_input_queue.front();
+    arg_input_queue.pop();
+  } else {
+    std::cout << "The direction for applying the cost of the edge: ";
+    std::cin >> direct_str;
+  }
+
+  if (direct_str.size() > 3 || direct_str.size() < 2) {
+    std::cout << OutErr << "Wrong format of directions\n";
+    return -1;
+  }
+
+  return (*(int*)(direct_str.c_str()) & (direct_str.size() == 3 ? 0x00FFFFFF : 0x0000FFFF));
+}
+
+
+inline void setEdgeIfPossible(Edge* from, Edge* to, float cost_from, float cost_to) {
+  if (from) from->cost = cost_from;
+  if (to) to->cost = cost_to;
+}
+
+inline void inputCost(float& cost) {
+  if (!argument_flag.arg_mode) std::cout << "cost: ";
+  inputNumber(cost);
+}
+
+void fSetEdge() {
+// sete $target <-> 3
+// sete $target <- 5
+// sete $target -> 1
+// sete $target <=> 2 5
+// sete $target <>
+
+  if (graph.size() < 2) return;
+  checkValidArgumentCount(2);
+  giveChoiceUseNameAsIndex();
+
+  float cost = NAN;
+  int dir_raw = 0;
+  size_t targt_indx = handleEdgeIndexToInput();
+
+  if (targt_indx == -1) return;
+
+  size_t edge_indx_to   = getEdgeIndex(nod_origin_index, targt_indx);
+  size_t edge_indx_from = getEdgeIndex(targt_indx, nod_origin_index);
+
+  if (edge_indx_to == -1 && edge_indx_from == -1) {
+    std::cout << OutErr << "the edge target isn't connected to the index " << targt_indx << '\n';
+    return;
+  }
+
+  if ((dir_raw = inputDirection()) == -1) return;
+
+  Edge* from = (edge_indx_to != -1 ? &(graph[nod_origin_index].edge[edge_indx_to]) : nullptr);
+  Edge* to   = (edge_indx_from != -1 ? &(graph[targt_indx].edge[edge_indx_from]) : nullptr);
+
+  if(dir_raw != '><') inputCost(cost);
+
+  if (dir_raw == '><' || dir_raw == '>-<') { setEdgeIfPossible(from, to, cost, cost); return; }
+
+  if (dir_raw != '>=<') {
+    if (dir_raw == '-<') { setEdgeIfPossible(from, to, cost, NAN); return;  }
+    else if (dir_raw == '>-') { setEdgeIfPossible(from, to, NAN, cost); return;  }
+  }
+  else {
+    float cost_2;
+    inputCost(cost);
+    inputCost(cost_2);
+    setEdgeIfPossible(from, to, cost, cost_2);
+    return;
+  }
+
+  std::cout << OutErr << "the edge target isn't connected to the index " << targt_indx << " \"" << (char*)(&dir_raw) << '\"' << '\n';
+}
+
+
 void fDictionPoint() {
   using pair_name_map = std::pair<std::string, size_t>;
 
@@ -479,17 +574,20 @@ void fDictionPoint() {
 }
 
 
-void removeEdgeFromNodes(size_t targt) {
-  for (size_t i = 0; i < graph[nod_origin_index].edge.size(); i++) {
-    if (graph[nod_origin_index].edge[i].indx_from == targt || graph[nod_origin_index].edge[i].indx_to == targt) {
-      graph[nod_origin_index].edge.erase(graph[nod_origin_index].edge.begin() + i);
+void removeEdgeFromNodes(size_t targt_indx) {
+  auto& orign = graph[nod_origin_index].edge;
+  auto& targt = graph[targt_indx].edge;
+
+  for (size_t i = 0; i < orign.size(); i++) {
+    if (orign[i].indx_from == targt_indx || orign[i].indx_to == targt_indx) {
+      orign.erase(orign.begin() + i);
       break;
     }
   }
 
-  for (size_t i = 0; i < graph[targt].edge.size(); i++) {
-    if (graph[targt].edge[i].indx_from == nod_origin_index || graph[targt].edge[i].indx_to == nod_origin_index) {
-      graph[targt].edge.erase(graph[targt].edge.begin() + i);
+  for (size_t i = 0; i < targt.size(); i++) {
+    if (targt[i].indx_from == nod_origin_index || targt[i].indx_to == nod_origin_index) {
+      targt.erase(targt.begin() + i);
       break;
     }
   }
@@ -1874,6 +1972,7 @@ const std::map<int,void (*)()> c_command_list = {
   {'newp',fNewPoint           },
   {'newe',fNewEdge            },
   {'seto',fSetOrigin          },
+  {'sete',fSetEdge            },
   {'remp',fRemovePoint        },
   {'reme',fRemoveEdge         },
   {'renm',fRenamePoint        },
