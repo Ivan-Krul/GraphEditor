@@ -15,6 +15,7 @@
 
 
 #define VERSION "1.4.0"
+#define DISABLE_WARNINGS
 
 #if defined(_WIN32) || defined(_WIN64) || \
   defined(__WIN32__) || defined(__TOS_WIN__) || \
@@ -37,6 +38,11 @@
 #define ARC "x86_32"
 #else
 #define ARC "arm"
+#endif
+
+#ifdef DISABLE_WARNINGS
+#pragma warning(disable : 4244)
+#pragma warning(disable : 4267)
 #endif
 
 
@@ -64,7 +70,7 @@ struct Node {
 };
 
 struct Variable {
-  union {
+  union Value {
     int  whol;
     float  flot;
     size_t indx = 0;
@@ -140,20 +146,37 @@ std::enable_if_t<std::is_arithmetic_v<T>, bool> fillWithVariable(T& number) {
 }
 
 
+template<typename T>
+inline T returnError(T returnsym, const std::string& message, std::ostream& out = std::cerr) {
+  out << OutErr << message << std::endl;
+  return returnsym;
+}
+
+inline void returnError(const std::string& message, std::ostream& out = std::cerr) {
+  out << OutErr << message << std::endl;
+}
+
+template<typename T>
+inline std::optional<T> returnError(const std::string& message, std::ostream& out = std::cerr) {
+  out << message << std::endl;
+  return std::nullopt;
+}
+
+
 inline bool checkVariableName(const std::unordered_map<std::string, Variable>::iterator& iter) {
-  if (iter == variables.end()) { std::cout << OutErr << "the variable wasn't found\n"; return true; }
+  if (iter == variables.end()) return returnError(true, "the variable wasn't found");
   return false;
 }
 
 
 inline bool checkGraphName(const std::unordered_map<std::string, size_t>::iterator& iter) {
-  if (iter == name_map.end()) { std::cout << OutErr << "not found by name\n"; return true; }
+  if (iter == name_map.end()) return returnError(true, "not found by name");
   return false;
 }
 
 
 inline bool checkGraphRange(size_t index) {
-  if (index >= graph.size()) { std::cout << OutErr << "index is out of range\n"; return true; }
+  if (index >= graph.size()) returnError(true,"index is out of range");
   return false;
 }
 
@@ -268,11 +291,8 @@ std::enable_if_t<std::is_unsigned_v<T> && !std::is_floating_point_v<T>> inputNum
 template<typename T>
 std::enable_if_t<std::is_arithmetic_v<T>> setVariable(Variable& var, T number) {
   switch (var.type) {
-#pragma warning(suppress: 4244)
   case Variable::whol: var.value.whol = number; break;
-#pragma warning(suppress: 4244)
   case Variable::indx: var.value.indx = number; break;
-#pragma warning(suppress: 4244)
   case Variable::flot: var.value.flot = number; break;
   }
 }
@@ -295,24 +315,15 @@ void giveChoiceUseNameAsIndex() {
 size_t handleEdgeIndexToInput() {
   size_t targt = 0;
   if (inp[0] == 'Y') {
-    if ((targt = getNodeIndex()) == -1) {
-      std::cout << OutErr << "not found by name\n";
-      return -1;
-    }
+    if ((targt = getNodeIndex()) == -1) return returnError(-1, "not found by name");
   } else if (inp[0] == 'n') {
     if (!argument_flag.arg_mode) std::cout << "index: ";
     inputNumber(targt);
 
     if (checkGraphRange(targt)) return -1;
 
-    if (targt == nod_origin_index) {
-      std::cout << OutErr << "index is the same with origin\n";
-      return -1;
-    }
-  } else {
-    std::cout << OutErr << "way of input is undefined\n";
-    return -1;
-  }
+    if (targt == nod_origin_index) return returnError(-1, "index is the same with origin");
+  } else return returnError(-1, "way of input is undefined");
   return targt;
 }
 
@@ -354,13 +365,9 @@ void fList() {
 
     std::cout << '\t';
 
-    if (cur.edge[i].cost == NAN) {
-      std::cout << "nous ";
-      
-      if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
-      else std::cout << graph[nod_to].name;
-    }
-    else if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
+    if (std::isnan(cur.edge[i].cost) && std::isnan(graph[nod_to].edge[getEdgeIndex(nod_to, nod_origin_index)].cost)) std::cout << "nous ";
+
+    if (nod_to >= graph.size()) std::cout << "invl " << nod_to;
     else std::cout << graph[nod_to].name;
 
     std::cout << " -> " << cur.edge[i].cost << '\n';
@@ -388,9 +395,8 @@ void fSetOrigin() {
 
   if (inp[0] == 'Y') {
     if ((nod_origin_index = getNodeIndex()) == -1) {
-      std::cout << OutErr << "not found by name\n";
       nod_origin_index = 0;
-      return;
+      return returnError("not found by name");
     }
   } else if (inp[0] == 'n') {
     inputNumber(nod_origin_index);
@@ -460,7 +466,7 @@ void fRemovePoint() {
   size_t targt;
 
   if (inp[0] == 'Y') {
-    if ((targt = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
+    if ((targt = getNodeIndex()) == -1) return returnError("not found by name");
 
     if (nod_origin_index >= targt) nod_origin_index--;
 
@@ -488,18 +494,15 @@ int inputDirection() {
     std::cin >> direct_str;
   }
 
-  if (direct_str.size() > 3 || direct_str.size() < 2) {
-    std::cout << OutErr << "Wrong format of directions\n";
-    return -1;
-  }
+  if (direct_str.size() > 3 || direct_str.size() < 2) return returnError(-1, "Wrong format of directions");
 
   return (*(int*)(direct_str.c_str()) & (direct_str.size() == 3 ? 0x00FFFFFF : 0x0000FFFF));
 }
 
 
-inline void setEdgeIfPossible(Edge* from, Edge* to, float cost_from, float cost_to) {
-  if (from) from->cost = cost_from;
-  if (to) to->cost = cost_to;
+inline void setEdgeIfPossible(Edge& from, Edge& to, float cost_from, float cost_to) {
+  from.cost = cost_from;
+  to.cost = cost_to;
 }
 
 inline void inputCost(float& cost) {
@@ -527,15 +530,11 @@ void fSetEdge() {
   size_t edge_indx_to   = getEdgeIndex(nod_origin_index, targt_indx);
   size_t edge_indx_from = getEdgeIndex(targt_indx, nod_origin_index);
 
-  if (edge_indx_to == -1 && edge_indx_from == -1) {
-    std::cout << OutErr << "the edge target isn't connected to the index " << targt_indx << '\n';
-    return;
-  }
-
+  if (edge_indx_to == -1 || edge_indx_from == -1) return returnError("the edge target isn't connected to the index " + targt_indx);
   if ((dir_raw = inputDirection()) == -1) return;
 
-  Edge* from = (edge_indx_to != -1 ? &(graph[nod_origin_index].edge[edge_indx_to]) : nullptr);
-  Edge* to   = (edge_indx_from != -1 ? &(graph[targt_indx].edge[edge_indx_from]) : nullptr);
+  Edge& from = graph[nod_origin_index].edge[edge_indx_to];
+  Edge& to   = graph[targt_indx].edge[edge_indx_from];
 
   if(dir_raw != '><') inputCost(cost);
 
@@ -553,7 +552,37 @@ void fSetEdge() {
     return;
   }
 
-  std::cout << OutErr << "the edge target isn't connected to the index " << targt_indx << " \"" << (char*)(&dir_raw) << '\"' << '\n';
+  return returnError("the edge target isn't connected to the index " + targt_indx);
+}
+
+void fListUnusedEdges() {
+  for (auto& node : graph) {
+    for (auto& edge : node.edge) {
+      if (!(std::isnan(edge.cost) && std::isnan(graph[edge.indx_to].edge[getEdgeIndex(edge.indx_to, edge.indx_from)].cost))) continue;
+
+      std::cout << node.name << ":\n\t";
+
+      if (edge.indx_to >= graph.size()) std::cout << "invl " << edge.indx_to;
+      else std::cout << graph[edge.indx_to].name;
+
+      std::cout << '\n';
+    }
+  }
+}
+
+void fRemoveUnusedEdges() {
+  bool is_next_nan = false;
+  auto& node = graph[nod_origin_index];
+  for (size_t e = 0; e < node.edge.size(); e++) {
+    auto& edge = node.edge[e];
+    auto& next_edges = graph[edge.indx_to].edge;
+
+    is_next_nan = std::isnan(next_edges[getEdgeIndex(edge.indx_to, edge.indx_from)].cost);
+    if (!(std::isnan(edge.cost) && is_next_nan)) continue;
+
+    node.edge.erase(node.edge.begin() + e);
+    next_edges.erase(next_edges.begin() + getEdgeIndex(edge.indx_to, nod_origin_index));
+  }
 }
 
 
@@ -566,7 +595,7 @@ void fDictionPoint() {
   for (auto& elem : name_map) {
     vec_name_map.push_back(elem);
   }
-  std::sort(vec_name_map.begin(), vec_name_map.end(), [=](pair_name_map& a, pair_name_map& b) {return a.second < b.second; });
+  std::sort(vec_name_map.begin(), vec_name_map.end(), [=](pair_name_map& a, pair_name_map& b) { return a.second < b.second; });
 
   for (auto& a : vec_name_map) {
     std::cout << a.second << ": \"" << a.first << "\"" << '\n';
@@ -603,7 +632,7 @@ void fRemoveEdge() {
   size_t targt = 0;
 
   if (inp[0] == 'Y') {
-    if ((targt = getNodeIndex()) == -1) { std::cout << OutErr << "not found by name\n"; return; }
+    if ((targt = getNodeIndex()) == -1) return returnError("not found by name");
 
     removeEdgeFromNodes(targt);
 
@@ -701,9 +730,7 @@ void executePythonScript(const std::string& pythonname, const std::string& filen
     ;
 
 
-  if (exitRet) {
-    std::cout << "something went wrong with python script\n";
-  }
+  if (exitRet) std::cout << "something went wrong with python script\n";
 }
 
 void inputFileProperty(std::string& file) {
@@ -819,8 +846,11 @@ Commands:\n\
 \tnewp - create a node\n\
 \tnewe - create an edge (from origin to...)\n\
 \tseto - set origin node (to...)\n\
+\tsete - set edge two-sided, only sided and none sided with it's costs (<>, <-, ->, <->, <=>)\n\
+\tlstu - list of unused edges (those edges what assigned with <>)\n\
 \tremp - remove a node and removing all references to the node (is...)\n\
 \treme - remove an edge between origin and a node (from origin to...)\n\
+\tremu - remove unused edges in origin\n\
 \trenm - rename the current node\n\
 \tlist - list all nodes and costs which are adjacent to the origin node\n\
 \tdict - shows a dictionary of names and it's translation to their indexes\n\
@@ -868,7 +898,7 @@ In argument mode:\n\
 \t[-o] - alias to \"save\"\n\
 \t[-temp [i | o]] - alias to \"tmpi\" or \"tmpo\"\n\
 \n\
-\Also for functions:\n\
+Also for functions:\n\
 \tFunctions can be with ! at the beginning to signature that they would not make an entry to .func\n\
 \tThese functions are not savable\n\
 Also for variables:\n\
@@ -1017,14 +1047,14 @@ inline std::optional<std::pair<bool, std::queue<std::string>>> getQueue() {
     if (iter == temp_functions.end()) {
       iter = temp_functions_cache.find(inp);
       if (iter == temp_functions_cache.end()) return std::make_pair(true, iter->second);
-      else { std::cout << OutErr << "can not find the required function in temporaries" << '\n'; return {}; }
+      else return returnError<std::pair<bool, std::queue<std::string>>>("can not find the required function in temporaries");
     } else return std::make_pair(false, iter->second);
   } else {
     auto iter = functions.find(inp);
     if (iter == functions.end()) {
       iter = functions_cache.find(inp);
       if (iter == functions_cache.end()) return std::make_pair(true, iter->second);
-      else { std::cout << OutErr << "can not find the required function" << '\n'; return {}; }
+      else return returnError<std::pair<bool, std::queue<std::string>>>("can not find the required function");
     } else return std::make_pair(false, iter->second);
   }
 }
@@ -1062,7 +1092,7 @@ void dumpToDotFunc() {
       queue.pop();
     }
 
-    fout << queue.front() << "\cache\n";
+    fout << queue.front() << "cache\n";
   }
 
   fout.close();
@@ -1298,10 +1328,7 @@ void fNewVariable() {
     arg_input_queue.pop();
   }
 
-  if (inp[0] == c_mark_root_graph_name) {
-    std::cout << OutErr << "variable is being named like root ('"<<c_mark_root_graph_name<<"' at beginning of the name) is not supposed to exist\n";
-    return;
-  }
+  if (inp[0] == c_mark_root_graph_name) returnError(std::string("variable is being named like root ('") + c_mark_root_graph_name + "' at beginning of the name) is not supposed to exist");
 
   variables.insert(std::make_pair(inp, Variable{}));
 }
@@ -1457,12 +1484,12 @@ decltype(variables.begin()) getInputForSetVariable() {
   if (argument_flag.arg_mode) {
     iter = variables.find(arg_input_queue.front());
     arg_input_queue.pop();
-    if (checkVariableName(iter)) { std::cout << OutErr << "the variable has no match with the name\n"; return variables.end(); }
+    if (checkVariableName(iter)) return returnError(variables.end(), "the variable has no match with the name");
 
     if (convertStrToRawInt(arg_input_queue.front()) == 'whol') iter->second.type = Variable::whol;
     else if (convertStrToRawInt(arg_input_queue.front()) == 'flot') iter->second.type = Variable::flot;
     else if (convertStrToRawInt(arg_input_queue.front()) == 'indx') iter->second.type = Variable::indx;
-    else { std::cout << OutErr << "the value type wasn't settled\n"; arg_input_queue.pop(); return variables.end(); }
+    else { arg_input_queue.pop(); return returnError(variables.end(), "the value type wasn't settled"); }
     arg_input_queue.pop();
 
     inp = arg_input_queue.front();
@@ -1472,7 +1499,7 @@ decltype(variables.begin()) getInputForSetVariable() {
     std::getline(std::cin >> std::ws, inp);
 
     iter = variables.find(inp);
-    if (checkVariableName(iter)) { std::cout << OutErr << "the variable has no match with the name\n"; return variables.end(); }
+    if (checkVariableName(iter)) return returnError(variables.end(), "the variable has no match with the name");
 
     std::cout << "Type [whol(eq. int) / flot(eq. float) / indx]: ";
     std::cin >> inp;
@@ -1480,7 +1507,7 @@ decltype(variables.begin()) getInputForSetVariable() {
     if (convertStrToRawInt(inp) == 'whol') iter->second.type = Variable::whol;
     else if (convertStrToRawInt(inp) == 'flot') iter->second.type = Variable::flot;
     else if (convertStrToRawInt(inp) == 'indx') iter->second.type = Variable::indx;
-    else { std::cout << OutErr << "the value type wasn't settled\n"; return variables.end(); }
+    else return returnError(variables.end(), "the value type wasn't settled");
 
     std::cout << "Value: ";
     std::cin >> inp;
@@ -1502,7 +1529,7 @@ void setVariableFromEdge(size_t& sepFirst, decltype(variables.begin())& iter, si
   if (strcmp(inp.data() + sepFirst + 1, c_str_from) == 0)      setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_from);
   else if (strcmp(inp.data() + sepFirst + 1, c_str_to) == 0)   setVariable(iter->second, graph[indexNod].edge[indexEdg].indx_to);
   else if (strcmp(inp.data() + sepFirst + 1, c_str_cost) == 0) setVariable(iter->second, graph[indexNod].edge[indexEdg].cost);
-  else std::cout << OutErr << "no variable type isn't matching\n";
+  else return returnError("no variable type isn't matching");
 }
 
 void setVariableFromNode(size_t& sepFirst, decltype(variables.begin())& iter, size_t indexNod) {
@@ -1519,13 +1546,10 @@ void setVariableFromNode(size_t& sepFirst, decltype(variables.begin())& iter, si
     size_t s = 0;
     size_t indexEdg = getInsideScopeGeneric(sepFirst, s);
 
-    if (indexEdg == -1 || indexEdg == -2) {
-      std::cout << OutErr << "the index isn't in the range of the current edge index\n";
-      return;
-    }
+    if (indexEdg == -1 || indexEdg == -2) return returnError("the index isn't in the range of the current edge index");
 
     setVariableFromEdge(sepFirst, iter, indexNod, indexEdg);
-  } else std::cout << OutErr << "the demanding property from the node is unclear\n";
+  } else return returnError("the demanding property from the node is unclear");
 
   return;
 }
@@ -1535,29 +1559,20 @@ void setVariableFromGraphProperty(size_t& sepFirst, decltype(variables.begin())&
   constexpr const char* c_str_size = "size";
 
   sepFirst = inp.find_first_of(c_mark_root_separator, 2);
-  if (sepFirst == -1) {
-    std::cout << OutErr << "there's no separator after root variable\n";
-    return;
-  }
+  if (sepFirst == -1) return returnError("there's no separator after root variable");
 
   sepFirst++;
 
   if (strcmp(inp.substr(sepFirst, strlen(c_str_origin)).c_str(), c_str_origin) == 0) setVariable(iter->second, nod_origin_index);
   else if (strcmp(inp.substr(sepFirst, strlen(c_str_size)).c_str(), c_str_size) == 0) setVariable(iter->second, graph.size());
-  else std::cout << OutErr << "the demanding property is unclear to get from the graph itself\n";
+  else return returnError("the demanding property is unclear to get from the graph itself");
 }
 
 size_t chechIndexInputFromBracket(size_t& sepFirst) {
   size_t index = getGraphIndexInsideScopes(sepFirst); // sepFirst should be at last ]
 
-  if (index == -1) {
-    std::cout << OutErr << "the index wasn't found or is illegal to set\n";
-    return -1;
-  }
-  if (checkGraphRange(index)) {
-    std::cout << OutErr << "the index isn't in the range of the graph\n";
-    return -1;
-  }
+  if (index == -1) return returnError(-1, "the index wasn't found or is illegal to set");
+  if (checkGraphRange(index)) return returnError(-1, "the index isn't in the range of the graph");
   return index;
 }
 
@@ -1577,10 +1592,8 @@ size_t getIndexToFromBracket(size_t& sepFirst, size_t indexNod) {
   }
 
   if (!is_connected) {
-    if (inp.find_first_of(sepFirst, c_mark_root_separator) != -1) { // it can be as the condition
-      std::cout << OutErr << "the index isn't connected to the graph\n";
-      return -1;
-    }
+    if (inp.find_first_of(sepFirst, c_mark_root_separator) != -1) // it can be as the condition
+      return returnError(-1, "the index isn't connected to the graph");
     return -2;
   }
 
@@ -1700,9 +1713,8 @@ void fDecrementVariable() {
 }
 
 
-void fAddVariable() {
-  checkValidArgumentCount(2);
-  if (!argument_flag.arg_mode) std::cout << "Variable to be added: ";
+std::optional<std::pair<decltype(variables.begin()), decltype(variables.begin())>> inputItersForOperations(const char* arg_to_operator) {
+  if (!argument_flag.arg_mode) std::cout << "Variable to be " << arg_to_operator << ": ";
   auto iterin = getVariableInstance();
   if (checkVariableName(iterin)) return;
 
@@ -1710,8 +1722,16 @@ void fAddVariable() {
   auto iterfrom = getVariableInstance();
   if (checkVariableName(iterfrom)) return;
 
-  auto& var = iterin->second;
-  const auto& varFrom = iterfrom->second;
+  return std::make_pair(iterin, iterfrom);
+}
+
+void fAddVariable() {
+  checkValidArgumentCount(2);
+  auto opers = inputItersForOperations("added");
+  if (!opers.has_value()) return;
+
+  auto& var = opers->first->second;
+  const auto& varFrom = opers->second->second;
 
   switch (var.type) {
   case Variable::whol:
@@ -1737,16 +1757,11 @@ void fAddVariable() {
 
 void fSubVariable() {
   checkValidArgumentCount(2);
-  if (!argument_flag.arg_mode) std::cout << "Variable to be subtracted: ";
-  auto iterin = getVariableInstance();
-  if (checkVariableName(iterin)) return;
+  auto opers = inputItersForOperations("subtracted");
+  if (!opers.has_value()) return;
 
-  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
-  auto iterfrom = getVariableInstance();
-  if (checkVariableName(iterfrom)) return;
-
-  auto& var = iterin->second;
-  const auto& varFrom = iterfrom->second;
+  auto& var = opers->first->second;
+  const auto& varFrom = opers->second->second;
 
   switch (var.type) {
   case Variable::whol:
@@ -1772,16 +1787,11 @@ void fSubVariable() {
 
 void fMulVariable() {
   checkValidArgumentCount(2);
-  if (!argument_flag.arg_mode) std::cout << "Variable to be multiplied: ";
-  auto iterin = getVariableInstance();
-  if (checkVariableName(iterin)) return;
+  auto opers = inputItersForOperations("multiply");
+  if (!opers.has_value()) return;
 
-  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
-  auto iterfrom = getVariableInstance();
-  if (checkVariableName(iterfrom)) return;
-
-  auto& var = iterin->second;
-  const auto& varFrom = iterfrom->second;
+  auto& var = opers->first->second;
+  const auto& varFrom = opers->second->second;
 
   switch (var.type) {
   case Variable::whol:
@@ -1807,16 +1817,11 @@ void fMulVariable() {
 
 void fDivVariable() {
   checkValidArgumentCount(2);
-  if (!argument_flag.arg_mode) std::cout << "Variable to be multiplied: ";
-  auto iterin = getVariableInstance();
-  if (checkVariableName(iterin)) return;
+  auto opers = inputItersForOperations("divided");
+  if (!opers.has_value()) return;
 
-  if (!argument_flag.arg_mode) std::cout << "Variable from: ";
-  auto iterfrom = getVariableInstance();
-  if (checkVariableName(iterfrom)) return;
-
-  auto& var = iterin->second;
-  const auto& varFrom = iterfrom->second;
+  auto& var = opers->first->second;
+  const auto& varFrom = opers->second->second;
 
   switch (var.type) {
   case Variable::whol:
@@ -1975,6 +1980,8 @@ const std::map<int,void (*)()> c_command_list = {
   {'sete',fSetEdge            },
   {'remp',fRemovePoint        },
   {'reme',fRemoveEdge         },
+  {'lstu',fListUnusedEdges    },
+  {'remu',fRemoveUnusedEdges  },
   {'renm',fRenamePoint        },
   {'list',fList               },
   {'dict',fDictionPoint       },
@@ -2043,11 +2050,7 @@ int init(const int args, const char* argv[], size_t& arg_count) {
   }
 
 
-  if (isPythonMissing()) {
-    std::cout << OutErr << "python is missing in the enviroument\n";
-    return 1;
-  }
-
+  if (isPythonMissing()) return returnError(1, "python is missing in the enviroument");
   refreshFromDotFunc();
 
   return 0;
